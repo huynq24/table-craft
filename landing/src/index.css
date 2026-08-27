@@ -28,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --text: #a3aab8;
     --text-h: #f3f5f9;
     --text-dim: #6b7280;
@@ -46,12 +46,52 @@
   }
 }
 
+/* Explicit override from the theme toggle — wins regardless of OS preference. */
+:root[data-theme='dark'] {
+  --text: #a3aab8;
+  --text-h: #f3f5f9;
+  --text-dim: #6b7280;
+  --bg: #0b0d12;
+  --bg-soft: #12151c;
+  --border: #232733;
+  --card-bg: #12151c;
+  --accent: #4f8dfd;
+  --accent-2: #7dd3fc;
+  --accent-bg: rgba(79, 141, 253, 0.12);
+  --accent-border: rgba(79, 141, 253, 0.4);
+  --accent-contrast: #0b0d12;
+  --shadow:
+    rgba(0, 0, 0, 0.45) 0 10px 25px -5px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
 
+/* Zero-specificity so any element's own `transition` rule still wins outright. */
+:where(*, *::before, *::after) {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(*, *::before, *::after) {
+    transition: none;
+  }
+}
+
 body {
   margin: 0;
+  background: var(--bg);
 }
 
 h1,

@@ -1,9 +1,27 @@
+import { useEffect, useState } from 'react'
 import logo from '../assets/logo.png'
 import { REPO_URL, DOWNLOAD_URL } from '../config'
+import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      window.requestAnimationFrame(() => {
+        setScrolled(window.scrollY > 8)
+        ticking = false
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   return (
-    <header className="site-header">
+    <header className={`site-header ${scrolled ? 'is-scrolled' : ''}`}>
       <div className="container header-inner">
         <a href="#top" className="brand">
           <img src={logo} alt="" className="brand-logo" width={28} height={28} />
@@ -26,6 +44,8 @@ export default function Header() {
             GitHub
           </a>
         </nav>
+
+        <ThemeToggle />
 
         <a href={DOWNLOAD_URL} className="btn btn-primary btn-small">
           Download
