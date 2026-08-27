@@ -1,0 +1,753 @@
+/* Dark theme (default) — also the fallback while JS hasn't set data-theme yet. */
+:root,
+:root[data-theme='dark'] {
+  --bg-0: #1c1d22;
+  --bg-1: #212228;
+  --bg-2: #2a2b32;
+  --bg-3: #33343c;
+  --bg-hover: #3d3e47;
+  --border: #3a3b44;
+  --text: #e4e4e7;
+  --text-dim: #9a9ba5;
+  --accent: #4f8cff;
+  --accent-dim: #2c4a80;
+  --green: #4caf6f;
+  --red: #e5534b;
+  --yellow: #d9a441;
+  --danger-bg: rgba(229, 83, 75, 0.15);
+  --danger-border: var(--red);
+  --danger-text: #ff9d97;
+  --success-bg: rgba(76, 175, 111, 0.15);
+  --success-border: var(--green);
+  --success-text: #8fe0ab;
+  --font: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;
+}
+
+/* Light theme */
+:root[data-theme='light'] {
+  --bg-0: #f5f6f8;
+  --bg-1: #ffffff;
+  --bg-2: #eef0f3;
+  --bg-3: #e2e5ea;
+  --bg-hover: #d3d7dd;
+  --border: #d8dbe0;
+  --text: #1c1d22;
+  --text-dim: #6b6d76;
+  --accent: #2f6fed;
+  --accent-dim: #dbe7ff;
+  --green: #2f9e5c;
+  --red: #d33d33;
+  --yellow: #b98418;
+  --danger-bg: rgba(211, 61, 51, 0.08);
+  --danger-border: #d33d33;
+  --danger-text: #b3261e;
+  --success-bg: rgba(47, 158, 92, 0.1);
+  --success-border: #2f9e5c;
+  --success-text: #1f7a45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  overflow: hidden;
+  user-select: none;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 260px;
+  min-width: 180px;
+  max-width: 420px;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.icon-btn:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+.icon-btn svg {
+  flex-shrink: 0;
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.conn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 1px 6px;
+}
+.conn-row:hover {
+  background: var(--bg-2);
+}
+.conn-row.active {
+  background: var(--accent-dim);
+}
+
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+  flex-shrink: 0;
+}
+.conn-dot.on {
+  background: var(--green);
+}
+
+.conn-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.conn-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.conn-actions {
+  display: none;
+  gap: 2px;
+}
+.conn-row:hover .conn-actions {
+  display: flex;
+}
+
+.table-list {
+  padding-left: 20px;
+}
+
+.table-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 6px;
+  color: var(--text-dim);
+}
+.table-row:hover {
+  background: var(--bg-2);
+  color: var(--text);
+}
+.table-row.active {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+.table-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.driver-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.sidebar-footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn svg {
+  flex-shrink: 0;
+}
+.btn:hover {
+  background: var(--bg-hover);
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.btn.primary:hover {
+  filter: brightness(1.08);
+}
+.btn.danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: white;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.small {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+/* ---------- Main / Tabs ---------- */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabbar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-dim);
+  max-width: 220px;
+}
+.tab.active {
+  background: var(--bg-0);
+  color: var(--text);
+}
+.tab-close {
+  opacity: 0.5;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.tab-close:hover {
+  opacity: 1;
+  background: var(--bg-3);
+}
+
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Toolbar (table view) ---------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+  flex-shrink: 0;
+}
+
+.subtabs {
+  display: flex;
+  gap: 2px;
+  margin-right: 8px;
+}
+.subtab {
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.subtab.active {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+.filter-input {
+  flex: 1;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: var(--text);
+  min-width: 100px;
+}
+
+.status-text {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 0 6px;
+}
+
+/* ---------- Data grid ---------- */
+.grid-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+table.data-grid {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12.5px;
+  font-family: var(--mono);
+}
+
+table.data-grid thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 1;
+}
+table.data-grid thead th:hover {
+  color: var(--text);
+}
+
+table.data-grid tbody td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 4px 10px;
+  white-space: nowrap;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.data-grid tbody tr:hover {
+  background: var(--bg-2);
+}
+
+table.data-grid tbody tr.selected {
+  background: var(--accent-dim);
+}
+
+table.data-grid tbody tr.pending-delete td {
+  text-decoration: line-through;
+  opacity: 0.55;
+  background: var(--danger-bg);
+}
+table.data-grid tbody tr.pending-delete.selected td {
+  background: var(--danger-bg);
+}
+
+table.data-grid td.editing {
+  padding: 0;
+}
+
+table.data-grid td.dirty {
+  background: rgba(217, 164, 65, 0.15);
+}
+
+table.data-grid td input {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-0);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 3px 9px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+td.null-value {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+td.row-num {
+  color: var(--text-dim);
+  text-align: right;
+  user-select: none;
+  background: var(--bg-1);
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 170px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  font-size: 12.5px;
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text);
+}
+.context-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.context-menu-item:hover {
+  background: var(--bg-3);
+}
+.context-menu-item.danger {
+  color: var(--danger-text);
+}
+.context-menu-item.danger:hover {
+  background: var(--danger-bg);
+}
+
+/* ---------- Structure view ---------- */
+.structure-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  padding: 10px 10px 4px;
+}
+
+/* ---------- Query editor ---------- */
+.query-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.query-editor-wrap {
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+/* Match the SQL editor's font to the data grid's monospace font. CodeMirror's base
+   theme sets font-family directly on .cm-content/.cm-scroller/.cm-gutters (not just
+   .cm-editor), so inheriting from .cm-editor alone doesn't win — every descendant that
+   declares its own font-family needs to be targeted explicitly, with !important. */
+.query-editor-wrap .cm-editor,
+.query-editor-wrap .cm-scroller,
+.query-editor-wrap .cm-content,
+.query-editor-wrap .cm-gutters,
+.query-editor-wrap .cm-gutterElement,
+.query-editor-wrap .cm-line {
+  font-family: var(--mono) !important;
+  font-size: 12.5px !important;
+}
+
+/* The autocomplete suggestion dropdown is a floating tooltip CodeMirror appends
+   outside .query-editor-wrap (near document.body), so it needs its own unscoped rule. */
+.cm-tooltip.cm-tooltip-autocomplete,
+.cm-tooltip.cm-tooltip-autocomplete ul,
+.cm-tooltip.cm-tooltip-autocomplete li,
+.cm-completionLabel,
+.cm-completionDetail,
+.cm-completionMatchedText {
+  font-family: var(--mono) !important;
+  font-size: 12.5px !important;
+}
+
+.query-results {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------- Query history panel ---------- */
+.history-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.history-item:hover {
+  background: var(--bg-2);
+}
+
+.history-item-sql {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.history-item-meta {
+  display: flex;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.history-item-error {
+  color: var(--danger-text);
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.modal.wide {
+  width: 640px;
+}
+
+.modal-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.field input,
+.field select {
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+.field-row .field {
+  flex: 1;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.error-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.error-list-item {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.success-banner {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-dim);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
