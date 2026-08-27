@@ -41,6 +41,7 @@
   "build": {
     "appId": "com.tablecraft.app",
     "productName": "TableCraft",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "extraResources": [
       {
         "from": "build/icon.png",

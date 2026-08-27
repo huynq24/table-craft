@@ -1,8 +1,8 @@
 // Central place for the "download" wiring.
-// TODO: repo doesn't exist yet — replace REPO_URL with your real GitHub repo,
-// then update VERSION/ASSET_NAME to match the asset attached to your GitHub Release.
-export const VERSION = '0.1.0'
-export const REPO_URL = 'https://github.com/your-org/tablecraft'
+// Bump VERSION whenever you cut a new GitHub Release (must match the tag "vX.Y.Z"
+// and the asset name uploaded to that release).
+export const VERSION = '0.2.0'
+export const REPO_URL = 'https://github.com/huynq24/table-craft'
 export const ASSET_NAME = `TableCraft-Setup-${VERSION}.exe`
 
 export const RELEASES_URL = `${REPO_URL}/releases/latest`
