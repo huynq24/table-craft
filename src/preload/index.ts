@@ -1,11 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddColumnParams,
+  AddForeignKeyParams,
+  AddIndexParams,
   AlterColumnParams,
+  AlterForeignKeyParams,
+  AlterIndexParams,
   ConnectionConfig,
   CreateTableParams,
   DeleteRowParams,
   DropColumnParams,
+  DropForeignKeyParams,
+  DropIndexParams,
   DropTableParams,
   ExportParams,
   ExportRowsParams,
@@ -47,6 +53,13 @@ const api = {
     alterColumn: (params: AlterColumnParams) => ipcRenderer.invoke('db:alterColumn', params),
     dropColumn: (params: DropColumnParams) => ipcRenderer.invoke('db:dropColumn', params),
     dropTable: (params: DropTableParams) => ipcRenderer.invoke('db:dropTable', params),
+
+    addIndex: (params: AddIndexParams) => ipcRenderer.invoke('db:addIndex', params),
+    dropIndex: (params: DropIndexParams) => ipcRenderer.invoke('db:dropIndex', params),
+    alterIndex: (params: AlterIndexParams) => ipcRenderer.invoke('db:alterIndex', params),
+    addForeignKey: (params: AddForeignKeyParams) => ipcRenderer.invoke('db:addForeignKey', params),
+    dropForeignKey: (params: DropForeignKeyParams) => ipcRenderer.invoke('db:dropForeignKey', params),
+    alterForeignKey: (params: AlterForeignKeyParams) => ipcRenderer.invoke('db:alterForeignKey', params),
 
     exportTable: (params: ExportParams) => ipcRenderer.invoke('db:exportTable', params),
     exportRows: (params: ExportRowsParams) => ipcRenderer.invoke('db:exportRows', params),

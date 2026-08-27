@@ -715,9 +715,10 @@ export default function TableView({ tab }: Props): JSX.Element {
       )}
 
       {subview === 'data' && advancedMode && (
-        <div className="toolbar">
+        <div className="toolbar" data-search-container="table-data">
           <input
             className="filter-input"
+            data-search-input
             placeholder="WHERE clause, e.g. id > 10 AND status = 'active'"
             value={rawFilterInput}
             onChange={(e) => setRawFilterInput(e.target.value)}

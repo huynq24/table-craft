@@ -192,10 +192,15 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
       </div>
 
       {historyOpen && (
-        <div className="toolbar" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+        <div
+          className="toolbar"
+          data-search-container="query-history"
+          style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}
+        >
           <div style={{ display: 'flex', gap: 6 }}>
             <input
               className="filter-input"
+              data-search-input
               placeholder="Search query history…"
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}

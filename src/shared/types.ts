@@ -170,6 +170,55 @@ export interface DropTableParams {
   table: string
 }
 
+export interface AddIndexParams {
+  connectionId: string
+  schema: string
+  table: string
+  name: string
+  columns: string[]
+  unique: boolean
+}
+
+export interface DropIndexParams {
+  connectionId: string
+  schema: string
+  table: string
+  index: IndexInfo
+}
+
+export interface AddForeignKeyParams {
+  connectionId: string
+  schema: string
+  table: string
+  name: string
+  column: string
+  refTable: string
+  refColumn: string
+}
+
+export interface DropForeignKeyParams {
+  connectionId: string
+  schema: string
+  table: string
+  name: string
+}
+
+export interface AlterIndexParams {
+  connectionId: string
+  schema: string
+  table: string
+  original: IndexInfo
+  updated: { name: string; columns: string[]; unique: boolean }
+}
+
+export interface AlterForeignKeyParams {
+  connectionId: string
+  schema: string
+  table: string
+  original: ForeignKeyInfo
+  updated: { name: string; column: string; refTable: string; refColumn: string }
+}
+
 export interface ExportParams {
   connectionId: string
   schema: string

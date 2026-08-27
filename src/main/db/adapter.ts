@@ -1,12 +1,18 @@
 import type {
   AddColumnParams,
+  AddForeignKeyParams,
+  AddIndexParams,
   AlterColumnParams,
+  AlterForeignKeyParams,
+  AlterIndexParams,
   ColumnInfo,
   ConnectionConfig,
   CreateTableParams,
   DatabaseInfo,
   DeleteRowParams,
   DropColumnParams,
+  DropForeignKeyParams,
+  DropIndexParams,
   DropTableParams,
   FilterCondition,
   InsertRowParams,
@@ -46,6 +52,13 @@ export interface DbAdapter {
   alterColumn(params: Omit<AlterColumnParams, 'connectionId'>): Promise<void>
   dropColumn(params: Omit<DropColumnParams, 'connectionId'>): Promise<void>
   dropTable(params: Omit<DropTableParams, 'connectionId'>): Promise<void>
+
+  addIndex(params: Omit<AddIndexParams, 'connectionId'>): Promise<void>
+  dropIndex(params: Omit<DropIndexParams, 'connectionId'>): Promise<void>
+  alterIndex(params: Omit<AlterIndexParams, 'connectionId'>): Promise<void>
+  addForeignKey(params: Omit<AddForeignKeyParams, 'connectionId'>): Promise<void>
+  dropForeignKey(params: Omit<DropForeignKeyParams, 'connectionId'>): Promise<void>
+  alterForeignKey(params: Omit<AlterForeignKeyParams, 'connectionId'>): Promise<void>
 
   /** Quote an identifier (table/column name) safely for this driver. */
   quoteIdent(name: string): string
