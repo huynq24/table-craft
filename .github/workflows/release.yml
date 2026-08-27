@@ -47,6 +47,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Re-running this workflow for a tag that was already released (e.g. after
+          # a force-push that moves the tag) would otherwise fail here because the
+          # release already exists. Delete any existing release for this tag first
+          # so the job is idempotent.
+          gh release delete "${{ github.ref_name }}" --yes || true
+
           gh release create "${{ github.ref_name }}" dist/TableCraft-Setup-*.exe \
             --title "TableCraft ${{ github.ref_name }}" \
             --generate-notes
