@@ -1,13 +1,19 @@
 import { Pool } from 'pg'
 import type {
   AddColumnParams,
+  AddForeignKeyParams,
+  AddIndexParams,
   AlterColumnParams,
+  AlterForeignKeyParams,
+  AlterIndexParams,
   ColumnInfo,
   ConnectionConfig,
   CreateTableParams,
   DatabaseInfo,
   DeleteRowParams,
   DropColumnParams,
+  DropForeignKeyParams,
+  DropIndexParams,
   DropTableParams,
   ForeignKeyInfo,
   IndexInfo,
@@ -290,5 +296,46 @@ export class PostgresAdapter implements DbAdapter {
   async dropTable(params: Omit<DropTableParams, 'connectionId'>): Promise<void> {
     const { schema, table } = params
     await this.db.query(`DROP TABLE ${q(schema)}.${q(table)}`)
+  }
+
+  async addIndex(params: Omit<AddIndexParams, 'connectionId'>): Promise<void> {
+    const { schema, table, name, columns, unique } = params
+    const cols = columns.map(q).join(', ')
+    await this.db.query(
+      `CREATE ${unique ? 'UNIQUE ' : ''}INDEX ${q(name)} ON ${q(schema)}.${q(table)} (${cols})`
+    )
+  }
+
+  async dropIndex(params: Omit<DropIndexParams, 'connectionId'>): Promise<void> {
+    const { schema, table, index } = params
+    if (index.primary) {
+      await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(index.name)}`)
+    } else {
+      await this.db.query(`DROP INDEX ${q(schema)}.${q(index.name)}`)
+    }
+  }
+
+  async alterIndex(params: Omit<AlterIndexParams, 'connectionId'>): Promise<void> {
+    const { schema, table, original, updated } = params
+    await this.dropIndex({ schema, table, index: original })
+    await this.addIndex({ schema, table, name: updated.name, columns: updated.columns, unique: updated.unique })
+  }
+
+  async addForeignKey(params: Omit<AddForeignKeyParams, 'connectionId'>): Promise<void> {
+    const { schema, table, name, column, refTable, refColumn } = params
+    await this.db.query(
+      `ALTER TABLE ${q(schema)}.${q(table)} ADD CONSTRAINT ${q(name)} FOREIGN KEY (${q(column)}) REFERENCES ${q(schema)}.${q(refTable)} (${q(refColumn)})`
+    )
+  }
+
+  async dropForeignKey(params: Omit<DropForeignKeyParams, 'connectionId'>): Promise<void> {
+    const { schema, table, name } = params
+    await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(name)}`)
+  }
+
+  async alterForeignKey(params: Omit<AlterForeignKeyParams, 'connectionId'>): Promise<void> {
+    const { schema, table, original, updated } = params
+    await this.dropForeignKey({ schema, table, name: original.name })
+    await this.addForeignKey({ schema, table, ...updated })
   }
 }

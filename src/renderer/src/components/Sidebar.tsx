@@ -178,7 +178,7 @@ export default function Sidebar(): JSX.Element {
                 </span>
               </div>
               {isExpanded && isConnected && (
-                <div className="table-list">
+                <div className="table-list" data-search-container="sidebar-tables">
                   <div
                     className="table-row"
                     onClick={() => handleOpenQuery(conn)}
@@ -191,6 +191,7 @@ export default function Sidebar(): JSX.Element {
                     <div style={{ padding: '2px 10px 6px' }} onClick={(e) => e.stopPropagation()}>
                       <input
                         className="filter-input"
+                        data-search-input
                         style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
                         placeholder="Search tables…"
                         value={tableSearch[conn.id] ?? ''}

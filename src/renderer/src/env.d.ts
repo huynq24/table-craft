@@ -2,7 +2,11 @@
 
 import type {
   AddColumnParams,
+  AddForeignKeyParams,
+  AddIndexParams,
   AlterColumnParams,
+  AlterForeignKeyParams,
+  AlterIndexParams,
   ConnectionConfig,
   ConnectionSummary,
   ConnectResult,
@@ -10,6 +14,8 @@ import type {
   DatabaseInfo,
   DeleteRowParams,
   DropColumnParams,
+  DropForeignKeyParams,
+  DropIndexParams,
   DropTableParams,
   ExportParams,
   ExportRowsParams,
@@ -53,6 +59,13 @@ export interface Api {
     alterColumn: (params: AlterColumnParams) => Promise<void>
     dropColumn: (params: DropColumnParams) => Promise<void>
     dropTable: (params: DropTableParams) => Promise<void>
+
+    addIndex: (params: AddIndexParams) => Promise<void>
+    dropIndex: (params: DropIndexParams) => Promise<void>
+    alterIndex: (params: AlterIndexParams) => Promise<void>
+    addForeignKey: (params: AddForeignKeyParams) => Promise<void>
+    dropForeignKey: (params: DropForeignKeyParams) => Promise<void>
+    alterForeignKey: (params: AlterForeignKeyParams) => Promise<void>
 
     exportTable: (params: ExportParams) => Promise<{ ok: boolean; filePath?: string; rowCount?: number }>
     exportRows: (params: ExportRowsParams) => Promise<{ ok: boolean; filePath?: string; rowCount?: number }>

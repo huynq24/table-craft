@@ -3,11 +3,17 @@ import { writeFileSync, readFileSync } from 'fs'
 import Papa from 'papaparse'
 import type {
   AddColumnParams,
+  AddForeignKeyParams,
+  AddIndexParams,
   AlterColumnParams,
+  AlterForeignKeyParams,
+  AlterIndexParams,
   ConnectionConfig,
   CreateTableParams,
   DeleteRowParams,
   DropColumnParams,
+  DropForeignKeyParams,
+  DropIndexParams,
   DropTableParams,
   ExportParams,
   ExportRowsParams,
@@ -170,6 +176,36 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('db:dropTable', (_e, params: DropTableParams) => {
     const { connectionId, ...rest } = params
     return connectionManager.get(connectionId).dropTable(rest)
+  })
+
+  ipcMain.handle('db:addIndex', (_e, params: AddIndexParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).addIndex(rest)
+  })
+
+  ipcMain.handle('db:dropIndex', (_e, params: DropIndexParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).dropIndex(rest)
+  })
+
+  ipcMain.handle('db:alterIndex', (_e, params: AlterIndexParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).alterIndex(rest)
+  })
+
+  ipcMain.handle('db:addForeignKey', (_e, params: AddForeignKeyParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).addForeignKey(rest)
+  })
+
+  ipcMain.handle('db:dropForeignKey', (_e, params: DropForeignKeyParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).dropForeignKey(rest)
+  })
+
+  ipcMain.handle('db:alterForeignKey', (_e, params: AlterForeignKeyParams) => {
+    const { connectionId, ...rest } = params
+    return connectionManager.get(connectionId).alterForeignKey(rest)
   })
 
   // --- Export ---
