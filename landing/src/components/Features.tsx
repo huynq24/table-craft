@@ -11,39 +11,39 @@ type Feature = {
 const FEATURES: Feature[] = [
   {
     icon: IconLink,
-    title: 'Connection management',
+    title: 'Secure connection management',
     description:
-      'Save multiple MySQL/MariaDB and PostgreSQL connections at once. Passwords are encrypted at rest via Electron’s safeStorage. Test a connection before saving it.',
+      'Save unlimited MySQL, MariaDB, and PostgreSQL connections. Every password is encrypted at rest with Electron’s safeStorage, and you can test a connection before it ever gets saved.',
   },
   {
     icon: IconEdit,
-    title: 'Browse & edit data',
+    title: 'Inline data editing',
     description:
-      'Double-click a cell to edit it inline, add or delete rows. Column-based filter builder (pick a column, operator, value) or Advanced SQL mode for a raw WHERE clause.',
+      'Double-click any cell to edit it, add or delete rows in place. Build filters visually — pick a column, an operator, a value — or drop into Advanced SQL for a raw WHERE clause.',
   },
   {
     icon: IconGrid,
-    title: 'Table structure',
+    title: 'Visual schema management',
     description:
-      'View, add, edit, and drop columns. Inspect indexes and foreign keys. Search columns by name, drop a table when you need to — all from the Structure tab.',
+      'Add, edit, and drop columns without writing DDL by hand. Inspect indexes and foreign keys at a glance, and search across columns instantly from the Structure tab.',
   },
   {
     icon: IconCode,
-    title: 'Smart SQL editor',
+    title: 'SQL editor that knows your schema',
     description:
-      'CodeMirror-based editor with syntax highlighting. Autocomplete suggests real table/column names from the database, and typing JOIN prioritizes related tables and pre-fills ON.',
+      'A CodeMirror-powered editor with full syntax highlighting. Autocomplete suggests real table and column names, and typing JOIN pre-fills the ON clause from your actual foreign keys.',
   },
   {
     icon: IconTransfer,
-    title: 'Import / Export',
+    title: 'Effortless import & export',
     description:
-      'Export table data or query results to CSV/JSON (respects the active filter). Import data from a CSV file into a table.',
+      'Export table data or query results to CSV or JSON — filters included. Import a CSV straight into any table in a couple of clicks.',
   },
   {
     icon: IconLayout,
-    title: 'UI & productivity',
+    title: 'Built for daily use',
     description:
-      'Light and dark theme, remembered across restarts. Multiple tabs for tables/queries, multiple connections open at once. Ctrl+S saves, Ctrl+R reloads.',
+      'Light and dark themes that remember your choice. Work across multiple tables, queries, and connections in tabs, with Ctrl+S to save and Ctrl+R to reload.',
   },
 ]
 
@@ -52,9 +52,10 @@ export default function Features() {
     <section id="features" className="features">
       <div className="container">
         <Reveal>
-          <h2 className="section-title">Everything you need for day-to-day database work</h2>
+          <h2 className="section-title">Everything you need, nothing you don’t</h2>
           <p className="section-subtitle">
-            No need to memorize SQL for every action — but a full SQL editor is right there when you need it.
+            You won’t need to memorize SQL for everyday tasks — but a full SQL editor is always
+            one tab away.
           </p>
         </Reveal>
 

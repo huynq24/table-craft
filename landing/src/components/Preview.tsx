@@ -14,9 +14,10 @@ export default function Preview() {
     <section id="preview" className="preview">
       <div className="container">
         <Reveal>
-          <h2 className="section-title">A familiar UI, nothing to relearn</h2>
+          <h2 className="section-title">See the workspace before you install it</h2>
           <p className="section-subtitle">
-            Illustration of the app layout — connection sidebar, table/query tabs, and an editable data grid.
+            Connection sidebar, tabbed tables and queries, and a data grid you edit directly —
+            this is what opens the moment you launch TableCraft.
           </p>
         </Reveal>
 
@@ -59,7 +60,14 @@ export default function Preview() {
                   {ROWS.map((r, i) => (
                     <div className="mock-grid-row mock-grid-row-anim" style={{ animationDelay: `${300 + i * 90}ms` }} key={r.id}>
                       <span>{r.id}</span>
-                      <span>{r.name}</span>
+                      {i === 0 ? (
+                        <span className="mock-cell-editing">
+                          {r.name}
+                          <span className="mock-cursor" aria-hidden="true" />
+                        </span>
+                      ) : (
+                        <span>{r.name}</span>
+                      )}
                       <span>{r.email}</span>
                       <span className={`mock-pill ${r.status}`}>{r.status}</span>
                     </div>

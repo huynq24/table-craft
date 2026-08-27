@@ -3,9 +3,9 @@ import { IconDownload, IconMonitor } from './icons'
 import { DOWNLOAD_URL, RELEASES_URL, VERSION } from '../config'
 
 const STEPS = [
-  'Download the .exe file below',
-  'Run the installer (NSIS) — you can choose the install folder',
-  'Open TableCraft and add your first MySQL/PostgreSQL connection',
+  'Download the installer below (.exe)',
+  'Run it — the NSIS installer lets you pick the install folder',
+  'Launch TableCraft and add your first connection',
 ]
 
 export default function Download() {
@@ -14,8 +14,12 @@ export default function Download() {
       <div className="container">
         <Reveal>
           <div className="download-card">
-            <div className="download-icon">
-              <IconMonitor width={26} height={26} />
+            <div className="download-icon-wrap">
+              <span className="ping-ring" aria-hidden="true" />
+              <span className="ping-ring" style={{ animationDelay: '1.2s' }} aria-hidden="true" />
+              <div className="download-icon">
+                <IconMonitor width={26} height={26} />
+              </div>
             </div>
             <h2>Download TableCraft for Windows</h2>
             <p className="download-version">
@@ -26,6 +30,7 @@ export default function Download() {
               <IconDownload width={19} height={19} />
               Download for free
             </a>
+            <p className="download-trust">No account, no telemetry — just download and connect.</p>
             <p className="download-alt">
               or see all releases on{' '}
               <a href={RELEASES_URL} target="_blank" rel="noreferrer">
@@ -40,8 +45,9 @@ export default function Download() {
             </ol>
 
             <p className="download-note">
-              Current limitations (v{VERSION}): editing/deleting rows requires a primary key ·
-              the SQL editor runs one statement at a time · SQLite/SQL Server aren’t supported yet.
+              Known limitations in v{VERSION}: editing or deleting a row requires a primary key,
+              the SQL editor runs one statement at a time, and SQLite/SQL Server support is on
+              the roadmap.
             </p>
           </div>
         </Reveal>
