@@ -8,7 +8,7 @@ import type { Tab } from '../store/appStore'
 import { useAppStore } from '../store/appStore'
 import { useThemeStore } from '../store/themeStore'
 import DataGrid from './DataGrid'
-import { buildRelationMap, createJoinAwareSqlCompletion } from '../lib/sqlCompletion'
+import { buildRelationMap, buildSqlCompletionSources } from '../lib/sqlCompletion'
 import type { QueryHistoryEntry, QueryResult, TableStructure } from '@shared/types'
 
 interface Props {
@@ -96,10 +96,10 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
   const relationCount = useMemo(() => Object.values(relationMap).reduce((n, list) => n + list.length, 0), [relationMap])
 
   const extensions = useMemo(() => {
-    const completionSource = createJoinAwareSqlCompletion(dialect, sqlSchema, defaultSchemaName, relationMap)
+    const completionSources = buildSqlCompletionSources(dialect, sqlSchema, defaultSchemaName, relationMap)
     return [
       sql({ dialect, schema: sqlSchema, defaultSchema: defaultSchemaName || undefined, upperCaseKeywords: true }),
-      autocompletion({ override: [completionSource] })
+      autocompletion({ override: completionSources })
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialect, sqlSchema, defaultSchemaName, relationMap])
