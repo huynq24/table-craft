@@ -54,55 +54,63 @@ function extractReferencedTables(sqlText: string): Set<string> {
 }
 
 /**
- * A CodeMirror completion source that:
- *  - after `JOIN `, suggests tables related (via FK, in either direction) to whatever
- *    tables are already in the query, each pre-filled with a ready-made `ON` clause;
- *    other tables still show up below, just unprioritized.
- *  - everywhere else, falls back to the normal schema (table/column) + keyword completion,
- *    replicating what `sql()`'s built-in completion would otherwise provide.
+ * A CodeMirror completion source that, after `JOIN `, suggests tables related (via FK, in
+ * either direction) to whatever tables are already in the query, each pre-filled with a
+ * ready-made `ON` clause; other tables still show up below, just unprioritized. Returns
+ * `null` everywhere else so it can be combined with other sources (schema, keywords) via
+ * `autocompletion`'s `override` array — CodeMirror merges results from all active sources
+ * into a single dropdown, so this doesn't need to replicate them itself.
  */
-export function createJoinAwareSqlCompletion(
+function createJoinAwareCompletion(schema: Record<string, string[]>, relationMap: RelationMap): CompletionSource {
+  return (context) => {
+    const word = context.matchBefore(/[`"[\]\w]*/)
+    if (!word) return null
+    const lookback = context.state.sliceDoc(Math.max(0, word.from - 30), word.from)
+    if (!/\bjoin\s+$/i.test(lookback)) return null
+
+    const referenced = extractReferencedTables(context.state.doc.toString())
+    const seen = new Set<string>()
+    const options: Completion[] = []
+
+    referenced.forEach((t) => {
+      ;(relationMap[t] ?? []).forEach((rel) => {
+        if (referenced.has(rel.table) || seen.has(rel.table)) return
+        seen.add(rel.table)
+        options.push({
+          label: rel.table,
+          type: 'class',
+          detail: `related · ${rel.via}`,
+          boost: 10,
+          apply: `${rel.table} ON ${rel.onSql}`
+        })
+      })
+    })
+
+    Object.keys(schema).forEach((t) => {
+      if (seen.has(t) || referenced.has(t)) return
+      options.push({ label: t, type: 'class' })
+    })
+
+    return options.length > 0 ? { from: word.from, to: word.to, options, validFor: /^[`"[\]\w]*$/ } : null
+  }
+}
+
+/**
+ * Builds the full set of completion sources for the query editor: JOIN-aware table
+ * suggestions, schema (table/column) completion, and SQL keyword completion. Pass the
+ * whole array to `autocompletion({ override })` — CodeMirror runs every source and merges
+ * their results, so table/column names and database keywords (SELECT, WHERE, JOIN, …) show
+ * up together instead of one silently shadowing the other.
+ */
+export function buildSqlCompletionSources(
   dialect: SQLDialect,
   schema: Record<string, string[]>,
   defaultSchema: string,
   relationMap: RelationMap
-): CompletionSource {
-  const schemaSource = schemaCompletionSource({ dialect, schema, defaultSchema })
-  const keywordSource = keywordCompletionSource(dialect, true)
-
-  return (context) => {
-    const word = context.matchBefore(/[`"[\]\w]*/)
-    if (word) {
-      const lookback = context.state.sliceDoc(Math.max(0, word.from - 30), word.from)
-      if (/\bjoin\s+$/i.test(lookback)) {
-        const referenced = extractReferencedTables(context.state.doc.toString())
-        const seen = new Set<string>()
-        const options: Completion[] = []
-
-        referenced.forEach((t) => {
-          ;(relationMap[t] ?? []).forEach((rel) => {
-            if (referenced.has(rel.table) || seen.has(rel.table)) return
-            seen.add(rel.table)
-            options.push({
-              label: rel.table,
-              type: 'class',
-              detail: `related · ${rel.via}`,
-              boost: 10,
-              apply: `${rel.table} ON ${rel.onSql}`
-            })
-          })
-        })
-
-        Object.keys(schema).forEach((t) => {
-          if (seen.has(t) || referenced.has(t)) return
-          options.push({ label: t, type: 'class' })
-        })
-
-        if (options.length > 0) {
-          return { from: word.from, to: word.to, options, validFor: /^[`"[\]\w]*$/ }
-        }
-      }
-    }
-    return schemaSource(context) ?? keywordSource(context)
-  }
+): CompletionSource[] {
+  return [
+    createJoinAwareCompletion(schema, relationMap),
+    schemaCompletionSource({ dialect, schema, defaultSchema }),
+    keywordCompletionSource(dialect, true)
+  ]
 }

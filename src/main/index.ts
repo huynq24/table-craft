@@ -34,7 +34,10 @@ function createWindow(): void {
     }
   })
 
-  win.on('ready-to-show', () => win.show())
+  win.on('ready-to-show', () => {
+    win.maximize()
+    win.show()
+  })
 
   // Keep DevTools reachable via F12 now that the default menu (and its accelerator) is gone.
   win.webContents.on('before-input-event', (_e, input) => {
