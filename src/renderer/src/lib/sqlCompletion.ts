@@ -96,6 +96,37 @@ function createJoinAwareCompletion(schema: Record<string, string[]>, relationMap
 }
 
 /**
+ * Tables past the eager-introspection cap (see MAX_AUTOCOMPLETE_TABLES in QueryEditor) have
+ * their name indexed but an empty column list. Once the user types `thatTable.`, this fetches
+ * the real columns on demand (via `ensureColumns`, backed by getTableStructure) and resolves
+ * the completion once they arrive — so every table gets working column completion, just a
+ * beat later for ones outside the initial batch. Tables that already have columns (i.e.
+ * everything within the cap) are left alone; `schemaCompletionSource` already handles those.
+ */
+function createLazyColumnCompletion(
+  schema: Record<string, string[]>,
+  ensureColumns: (table: string) => Promise<string[]>
+): CompletionSource {
+  return (context) => {
+    const match = context.matchBefore(/[A-Za-z_]\w*\.\w*$/)
+    if (!match) return null
+    const dot = match.text.indexOf('.')
+    const table = match.text.slice(0, dot)
+    if (!(table in schema) || schema[table].length > 0) return null
+
+    return ensureColumns(table).then((columns) =>
+      columns.length > 0
+        ? {
+            from: match.from + dot + 1,
+            options: columns.map((c) => ({ label: c, type: 'property' })),
+            validFor: /^\w*$/
+          }
+        : null
+    )
+  }
+}
+
+/**
  * Builds the full set of completion sources for the query editor: JOIN-aware table
  * suggestions, schema (table/column) completion, and SQL keyword completion. Pass the
  * whole array to `autocompletion({ override })` — CodeMirror runs every source and merges
@@ -106,10 +137,12 @@ export function buildSqlCompletionSources(
   dialect: SQLDialect,
   schema: Record<string, string[]>,
   defaultSchema: string,
-  relationMap: RelationMap
+  relationMap: RelationMap,
+  ensureColumns: (table: string) => Promise<string[]> = () => Promise.resolve([])
 ): CompletionSource[] {
   return [
     createJoinAwareCompletion(schema, relationMap),
+    createLazyColumnCompletion(schema, ensureColumns),
     schemaCompletionSource({ dialect, schema, defaultSchema }),
     keywordCompletionSource(dialect, true)
   ]

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import {
   RefreshCw,
   ClipboardPaste,
@@ -16,7 +16,7 @@ import { useAppStore } from '../store/appStore'
 import DataGrid from './DataGrid'
 import StructureView from './StructureView'
 import ErrorDialog from './ErrorDialog'
-import type { FilterCondition, FilterOperator } from '@shared/types'
+import type { FilterCondition, FilterOperator, ForeignKeyInfo } from '@shared/types'
 
 const DEFAULT_PAGE_SIZE = 100
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500, 1000, 5000]
@@ -44,19 +44,29 @@ function needsValue(op: FilterOperator): boolean {
   return op !== 'IS NULL' && op !== 'IS NOT NULL'
 }
 
+function toDraftConditions(filters: FilterCondition[] | undefined): DraftCondition[] {
+  return (filters ?? []).map((f) => ({
+    id: crypto.randomUUID(),
+    column: f.column,
+    operator: f.operator,
+    value: f.value ?? ''
+  }))
+}
+
 interface Props {
   tab: Tab
 }
 
 export default function TableView({ tab }: Props): JSX.Element {
   const { connectionId, schema = '', table = '' } = tab
-  const { closeTab, setTables, tablesByConnection, activeTabId } = useAppStore()
+  const { closeTab, setTables, tablesByConnection, activeTabId, openTab, clearPendingFilter } = useAppStore()
 
   const [subview, setSubview] = useState<'data' | 'structure'>('data')
 
   const [columns, setColumns] = useState<string[]>([])
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [pkColumns, setPkColumns] = useState<string[]>([])
+  const [foreignKeys, setForeignKeys] = useState<ForeignKeyInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Save can fail per-row (e.g. one of several deletes hits a foreign key constraint) —
@@ -70,11 +80,18 @@ export default function TableView({ tab }: Props): JSX.Element {
   const [sortDir, setSortDir] = useState<'ASC' | 'DESC'>('ASC')
 
   // Column-based filter builder (feature 3) + a raw SQL fallback for power users.
+  // Seeded from tab.pendingFilter (set by "jump to referenced row") when present, so a
+  // freshly-opened tab's very first fetch is already filtered instead of loading unfiltered
+  // and then re-fetching a beat later once the pendingFilter effect below catches up.
   const [advancedMode, setAdvancedMode] = useState(false)
-  const [conditions, setConditions] = useState<DraftCondition[]>([])
-  const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([])
+  const [conditions, setConditions] = useState<DraftCondition[]>(() => toDraftConditions(tab.pendingFilter))
+  const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>(tab.pendingFilter ?? [])
   const [rawFilterInput, setRawFilterInput] = useState('')
   const [rawFilter, setRawFilter] = useState('')
+  // Tracks whether tab.pendingFilter has already been folded into the state above (either by
+  // the initializers just now, or by the effect further down) — so the effect doesn't reapply
+  // the same pendingFilter a second time and reset the page/rebuild `conditions` for no reason.
+  const consumedPendingFilterRef = useRef<FilterCondition[] | undefined>(tab.pendingFilter)
 
   const [pendingEdits, setPendingEdits] = useState<Record<number, Record<string, unknown>>>({})
   const [newRows, setNewRows] = useState<Record<string, unknown>[]>([])
@@ -176,6 +193,47 @@ export default function TableView({ tab }: Props): JSX.Element {
   useEffect(() => {
     load()
   }, [load])
+
+  // Foreign keys drive the "jump to referenced row" button on FK cells (feature: FK
+  // navigation) — fetched once per table, not on every reload, since they don't change
+  // while just paging/sorting/filtering.
+  useEffect(() => {
+    let cancelled = false
+    window.api.db
+      .getTableStructure(connectionId, schema, table)
+      .then((s) => {
+        if (!cancelled) setForeignKeys(s.foreignKeys ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setForeignKeys([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [connectionId, schema, table])
+
+  // A "jump to referenced row" click elsewhere seeds this tab's pendingFilter (see
+  // handleNavigateFk / appStore.openTab) — apply it through the same filter-builder pipeline
+  // the UI itself uses, then clear it from the store so simply re-activating this tab later
+  // doesn't reapply a stale filter. The very first pendingFilter (present when this tab was
+  // just created) is already folded into `conditions`/`appliedFilters` by their useState
+  // initializers above — consumedPendingFilterRef lets this effect recognize that case and
+  // just clear the store flag, instead of redundantly resetting state (and the page) again.
+  useEffect(() => {
+    const pending = tab.pendingFilter
+    if (!pending) return
+    if (pending === consumedPendingFilterRef.current) {
+      clearPendingFilter(tab.id)
+      return
+    }
+    consumedPendingFilterRef.current = pending
+    setAdvancedMode(false)
+    setConditions(toDraftConditions(pending))
+    setAppliedFilters(pending)
+    setOffset(0)
+    clearPendingFilter(tab.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.pendingFilter])
 
   const isDirty = Object.keys(pendingEdits).length > 0 || newRows.length > 0 || pendingDeletes.size > 0
   // Save is otherwise silent (no toast, just a re-fetch) — this flashes a confirmation
@@ -312,6 +370,32 @@ export default function TableView({ tab }: Props): JSX.Element {
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, tab.id, subview, loading, load, pendingEdits, newRows, selectedRows, undoStack, redoStack])
+
+  // FK navigation: clicking the "->" button on a foreign-key cell opens (or focuses) the
+  // referenced table's tab with a filter pre-applied to that exact row, reusing the same
+  // deterministic tab-id convention Sidebar.tsx uses so an already-open tab is just refocused.
+  function handleNavigateFk(rowIndex: number, fk: ForeignKeyInfo): void {
+    const row = displayRows[rowIndex]
+    const value = row?.[fk.column]
+    if (value === null || value === undefined) return
+    // Mirrors DataGrid's formatCell() Date handling so a datetime-typed key still lines up
+    // with what the referenced table's own rows show.
+    const filterValue =
+      value instanceof Date
+        ? Number.isNaN(value.getTime())
+          ? '0000-00-00 00:00:00'
+          : value.toISOString()
+        : String(value)
+    openTab({
+      id: `table-${connectionId}-${schema}-${fk.refTable}`,
+      connectionId,
+      kind: 'table',
+      title: fk.refTable,
+      schema,
+      table: fk.refTable,
+      pendingFilter: [{ column: fk.refColumn, operator: '=', value: filterValue }]
+    })
+  }
 
   function handleHeaderClick(col: string): void {
     if (sortColumn === col) {
@@ -755,6 +839,8 @@ export default function TableView({ tab }: Props): JSX.Element {
               onRowSelect={handleRowSelect}
               pendingDeleteRows={pendingDeletes}
               rowOrder={rowOrder}
+              foreignKeys={foreignKeys}
+              onNavigateFk={handleNavigateFk}
             />
           </div>
           <div className="toolbar" style={{ justifyContent: 'space-between' }}>

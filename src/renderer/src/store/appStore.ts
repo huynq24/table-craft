@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ConnectionSummary, TableInfo } from '@shared/types'
+import type { ConnectionSummary, FilterCondition, TableInfo } from '@shared/types'
 
 export type TabKind = 'table' | 'query'
 
@@ -44,6 +44,13 @@ export interface Tab {
   title: string
   schema?: string
   table?: string
+  /**
+   * A filter to apply as soon as this tab's TableView mounts/updates — set by "jump to
+   * referenced row" (clicking a foreign-key cell opens/focuses the target table's tab with
+   * this filled in). TableView applies it once, then clears it via clearPendingFilter so
+   * re-activating the tab later doesn't reapply a stale filter.
+   */
+  pendingFilter?: FilterCondition[]
 }
 
 interface AppState {
@@ -65,6 +72,7 @@ interface AppState {
   openTab: (tab: Tab) => void
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
+  clearPendingFilter: (id: string) => void
   openConnectModal: (editing?: ConnectionSummary | null) => void
   closeConnectModal: () => void
   resizeSidebarBy: (deltaPx: number) => void
@@ -104,7 +112,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         (t) => t.connectionId === tab.connectionId && t.kind === tab.kind && t.table === tab.table && (tab.kind !== 'query' || t.id === tab.id)
       )
       if (existing && tab.kind !== 'query') {
-        return { activeTabId: existing.id }
+        // Tab's already open (e.g. "jump to referenced row" landed on a table that's already
+        // a tab) — just focus it, but still carry over a pendingFilter so the jump's intent
+        // (show me that specific record) still takes effect.
+        const tabs = tab.pendingFilter
+          ? s.tabs.map((t) => (t.id === existing.id ? { ...t, pendingFilter: tab.pendingFilter } : t))
+          : s.tabs
+        return { tabs, activeTabId: existing.id }
       }
       return { tabs: [...s.tabs, tab], activeTabId: tab.id }
     }),
@@ -122,6 +136,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
+
+  clearPendingFilter: (id) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id && t.pendingFilter ? { ...t, pendingFilter: undefined } : t))
+    })),
 
   openConnectModal: (editing = null) => set({ connectModalOpen: true, editingConnection: editing }),
   closeConnectModal: () => set({ connectModalOpen: false, editingConnection: null }),

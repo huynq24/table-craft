@@ -252,8 +252,10 @@ button {
   color: var(--text);
 }
 .table-row.active {
-  background: var(--bg-3);
+  background: var(--accent-dim);
   color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .table-icon {
@@ -344,6 +346,7 @@ button {
   gap: 6px;
   padding: 8px 10px;
   border-right: 1px solid var(--border);
+  border-top: 2px solid transparent;
   cursor: pointer;
   white-space: nowrap;
   color: var(--text-dim);
@@ -352,6 +355,8 @@ button {
 .tab.active {
   background: var(--bg-0);
   color: var(--text);
+  font-weight: 600;
+  border-top-color: var(--accent);
 }
 .tab-close {
   opacity: 0.5;
@@ -507,6 +512,42 @@ table.data-grid td input {
 td.null-value {
   color: var(--text-dim);
   font-style: italic;
+}
+
+td.fk-cell {
+  /* Stays a normal table-cell — display:flex here would pull the <td> out of the
+     table's row layout and make the row visually split/merge with its neighbors. */
+  padding-right: 6px;
+}
+td.fk-cell .fk-cell-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+td.fk-cell .cell-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fk-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  opacity: 0.55;
+}
+.fk-jump-btn:hover {
+  opacity: 1;
+  background: var(--bg-3);
+  color: var(--accent);
 }
 
 td.row-num {

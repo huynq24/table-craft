@@ -36,6 +36,7 @@ export default function Sidebar(): JSX.Element {
     openConnectModal,
     setSavedConnections,
     tabs,
+    activeTabId,
     closeTab,
     sidebarWidth
   } = useAppStore()
@@ -200,27 +201,31 @@ export default function Sidebar(): JSX.Element {
                       />
                     </div>
                   )}
-                  {tables.map((t) => (
-                    <div
-                      key={`${t.schema}.${t.name}`}
-                      className="table-row"
-                      onClick={() =>
-                        openTab({
-                          id: `table-${conn.id}-${t.schema}-${t.name}`,
-                          connectionId: conn.id,
-                          kind: 'table',
-                          title: t.name,
-                          schema: t.schema,
-                          table: t.name
-                        })
-                      }
-                    >
-                      <span className="table-icon">
-                        {t.type === 'view' ? <Eye size={11} /> : <Table2 size={11} />}
-                      </span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
-                    </div>
-                  ))}
+                  {tables.map((t) => {
+                    const tabId = `table-${conn.id}-${t.schema}-${t.name}`
+                    const isActiveTable = activeTabId === tabId
+                    return (
+                      <div
+                        key={`${t.schema}.${t.name}`}
+                        className={`table-row${isActiveTable ? ' active' : ''}`}
+                        onClick={() =>
+                          openTab({
+                            id: tabId,
+                            connectionId: conn.id,
+                            kind: 'table',
+                            title: t.name,
+                            schema: t.schema,
+                            table: t.name
+                          })
+                        }
+                      >
+                        <span className="table-icon">
+                          {t.type === 'view' ? <Eye size={11} /> : <Table2 size={11} />}
+                        </span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
+                      </div>
+                    )
+                  })}
                   {tables.length === 0 && (
                     <div style={{ padding: '4px 10px', color: 'var(--text-dim)', fontSize: 11 }}>
                       {search ? 'No matching tables found' : 'No tables'}

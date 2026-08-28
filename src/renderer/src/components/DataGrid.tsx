@@ -1,5 +1,6 @@
-import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronUp, ChevronDown, RotateCcw, CopyPlus, Copy, ClipboardPaste, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { ChevronUp, ChevronDown, RotateCcw, CopyPlus, Copy, ClipboardPaste, X, ArrowUpRight } from 'lucide-react'
+import type { ForeignKeyInfo } from '@shared/types'
 
 export interface DataGridProps {
   columns: string[]
@@ -12,6 +13,10 @@ export interface DataGridProps {
   onCopyRow?: (rowIndex: number) => void
   onPasteRow?: (afterRowIndex: number) => void
   onHeaderClick?: (col: string) => void
+  /** Foreign keys of the table currently rendered — drives the "jump to referenced row" button. */
+  foreignKeys?: ForeignKeyInfo[]
+  /** Called when the jump button on a foreign-key cell is clicked. */
+  onNavigateFk?: (rowIndex: number, fk: ForeignKeyInfo) => void
   sortColumn?: string
   sortDir?: 'ASC' | 'DESC'
   offset?: number
@@ -34,7 +39,7 @@ interface ContextMenuState {
   y: number
 }
 
-function formatCell(v: unknown): string {
+export function formatCell(v: unknown): string {
   if (v === null || v === undefined) return 'NULL'
   // MySQL "zero dates" (0000-00-00) decode to a JS Invalid Date; toISOString()
   // throws RangeError on those, so guard rather than let it crash the render.
@@ -60,13 +65,25 @@ export default function DataGrid({
   selectedRows,
   onRowSelect,
   pendingDeleteRows,
-  rowOrder
+  rowOrder,
+  foreignKeys,
+  onNavigateFk
 }: DataGridProps): JSX.Element {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   const [draft, setDraft] = useState('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
   const hasRowMenu = Boolean(onDuplicateRow || onCopyRow || onPasteRow || onDeleteRow)
+
+  // One FK per column is all the UI needs — a column referencing two tables at once is
+  // exotic enough not to bother picking between them.
+  const fkByColumn = useMemo(() => {
+    const map = new Map<string, ForeignKeyInfo>()
+    foreignKeys?.forEach((fk) => {
+      if (!map.has(fk.column)) map.set(fk.column, fk)
+    })
+    return map
+  }, [foreignKeys])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -177,14 +194,34 @@ export default function DataGrid({
                     </td>
                   )
                 }
+                const fk = fkByColumn.get(col)
                 return (
                   <td
                     key={col}
-                    className={`${value === null ? 'null-value' : ''}${dirty ? ' dirty' : ''}`}
+                    className={`${value === null ? 'null-value' : ''}${dirty ? ' dirty' : ''}${fk ? ' fk-cell' : ''}`}
                     onDoubleClick={() => !markedForDeletion && startEdit(rowIndex, col, value)}
                     title={formatCell(value)}
                   >
-                    {formatCell(value)}
+                    {fk ? (
+                      <span className="fk-cell-inner">
+                        <span className="cell-value">{formatCell(value)}</span>
+                        {value !== null && value !== undefined && (
+                          <button
+                            type="button"
+                            className="fk-jump-btn"
+                            title={`Go to ${fk.refTable}.${fk.refColumn} = ${formatCell(value)}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onNavigateFk?.(rowIndex, fk)
+                            }}
+                          >
+                            <ArrowUpRight size={11} />
+                          </button>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="cell-value">{formatCell(value)}</span>
+                    )}
                   </td>
                 )
               })}
