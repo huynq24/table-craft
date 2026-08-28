@@ -9,6 +9,7 @@ import type {
   AlterForeignKeyParams,
   AlterIndexParams,
   ConnectionConfig,
+  ConnectionGroup,
   CreateTableParams,
   DeleteRowParams,
   DropColumnParams,
@@ -19,12 +20,16 @@ import type {
   ExportRowsParams,
   ImportCsvParams,
   InsertRowParams,
+  PreviewDdlParams,
+  QuerySnippet,
+  RoutineType,
   TableDataParams,
   UpdateRowParams
 } from '@shared/types'
 import { connectionManager } from './db/connectionManager'
 import { connectionStore } from './store'
 import { queryHistoryStore } from './historyStore'
+import { querySnippetStore } from './snippetStore'
 
 /** Shared "pick a file, write rows as CSV/JSON" flow used by both export IPC handlers. */
 async function saveRowsToFile(
@@ -61,11 +66,18 @@ export function registerIpcHandlers(): void {
     connectionStore.remove(id)
   })
 
+  ipcMain.handle('connections:listGroups', () => connectionStore.listGroups())
+  ipcMain.handle('connections:saveGroup', (_e, group: ConnectionGroup) => connectionStore.upsertGroup(group))
+  ipcMain.handle('connections:deleteGroup', (_e, id: string) => connectionStore.deleteGroup(id))
+
   ipcMain.handle('connections:getWithPassword', (_e, id: string) => {
     const cfg = connectionStore.getWithPassword(id)
     if (!cfg) return undefined
-    const { password, ...rest } = cfg
-    return rest
+    const { password, ssh, ...rest } = cfg
+    // Never send SSH secrets (password/privateKey/passphrase) to the renderer either —
+    // only non-secret fields, same guarantee as the DB password above.
+    const sshSummary = ssh ? { enabled: ssh.enabled, host: ssh.host, port: ssh.port, user: ssh.user, authMethod: ssh.authMethod } : undefined
+    return { ...rest, ssh: sshSummary }
   })
 
   // --- Live connection lifecycle ---
@@ -208,6 +220,34 @@ export function registerIpcHandlers(): void {
     return connectionManager.get(connectionId).alterForeignKey(rest)
   })
 
+  ipcMain.handle('db:previewDdl', (_e, params: PreviewDdlParams) => {
+    const { connectionId, operation } = params
+    return connectionManager.get(connectionId).buildDdlSql(operation)
+  })
+
+  // --- Triggers & routines (stored procedures/functions) ---
+  ipcMain.handle('db:listTriggers', (_e, id: string, schema: string) => connectionManager.get(id).listTriggers(schema))
+  ipcMain.handle('db:getTriggerDefinition', (_e, id: string, schema: string, name: string) =>
+    connectionManager.get(id).getTriggerDefinition(schema, name)
+  )
+  ipcMain.handle('db:saveTrigger', (_e, id: string, schema: string, sql: string) =>
+    connectionManager.get(id).saveTrigger(schema, sql)
+  )
+  ipcMain.handle('db:dropTrigger', (_e, id: string, schema: string, name: string, table: string) =>
+    connectionManager.get(id).dropTrigger(schema, name, table)
+  )
+
+  ipcMain.handle('db:listRoutines', (_e, id: string, schema: string) => connectionManager.get(id).listRoutines(schema))
+  ipcMain.handle('db:getRoutineDefinition', (_e, id: string, schema: string, name: string, type: RoutineType) =>
+    connectionManager.get(id).getRoutineDefinition(schema, name, type)
+  )
+  ipcMain.handle('db:saveRoutine', (_e, id: string, schema: string, sql: string) =>
+    connectionManager.get(id).saveRoutine(schema, sql)
+  )
+  ipcMain.handle('db:dropRoutine', (_e, id: string, schema: string, name: string, type: RoutineType) =>
+    connectionManager.get(id).dropRoutine(schema, name, type)
+  )
+
   // --- Export ---
   ipcMain.handle('db:exportTable', async (_e, params: ExportParams) => {
     const { connectionId, schema, table, format, filter } = params
@@ -252,5 +292,23 @@ export function registerIpcHandlers(): void {
       }
     }
     return { inserted, failed, total: parsed.data.length }
+  })
+
+  // --- Saved query snippets ---
+  ipcMain.handle('snippets:list', (_e, connectionId?: string) => querySnippetStore.list(connectionId))
+  ipcMain.handle('snippets:save', (_e, snippet: Omit<QuerySnippet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) =>
+    querySnippetStore.save(snippet)
+  )
+  ipcMain.handle('snippets:remove', (_e, id: string) => querySnippetStore.remove(id))
+
+  // --- Misc filesystem helpers used by the SSH-key "Browse…" picker ---
+  ipcMain.handle('system:pickTextFile', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const openOptions = { properties: ['openFile' as const] }
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, openOptions)
+      : await dialog.showOpenDialog(openOptions)
+    if (canceled || !filePaths[0]) return undefined
+    return readFileSync(filePaths[0], 'utf-8')
   })
 }

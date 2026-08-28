@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { Play, History, X, ChevronLeft, ChevronRight, WandSparkles } from 'lucide-react'
+import { Play, History, X, ChevronLeft, ChevronRight, WandSparkles, Gauge, BookMarked, Save } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import type { EditorView } from '@codemirror/view'
 import { keymap } from '@codemirror/view'
@@ -16,7 +16,7 @@ import ResizeHandle from './ResizeHandle'
 import { buildRelationMap, buildSqlCompletionSources } from '../lib/sqlCompletion'
 import { splitStatements, statementAtOffset } from '../lib/sqlStatements'
 import { detectSingleTableSource, resolveEditability } from '../lib/queryEditability'
-import type { QueryHistoryEntry, QueryResult, TableStructure } from '@shared/types'
+import type { QueryHistoryEntry, QueryResult, QuerySnippet, TableStructure } from '@shared/types'
 
 interface Props {
   tab: Tab
@@ -86,6 +86,11 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState<QueryHistoryEntry[]>([])
   const [historySearch, setHistorySearch] = useState('')
+
+  // Saved query snippets panel — named, user-curated queries (vs. the auto-logged history above).
+  const [snippetsOpen, setSnippetsOpen] = useState(false)
+  const [snippets, setSnippets] = useState<QuerySnippet[]>([])
+  const [snippetSearch, setSnippetSearch] = useState('')
 
   const appTheme = useThemeStore((s) => s.theme)
   const driver = useAppStore((s) => s.savedConnections.find((c) => c.id === tab.connectionId)?.driver)
@@ -225,6 +230,20 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
     return resolveEditability(activeRan.sql, activeRan.result.columns, tableStructures)
   }, [activeRan, tableStructures])
 
+  // Type-aware cell editors (boolean checkbox / date picker) for editable query results — the
+  // target table's structure is already fetched above to resolve editability in the first place.
+  const editableColumnTypes = useMemo(() => {
+    const target = editability.target
+    if (!target) return undefined
+    const structure = tableStructures[target.table]
+    if (!structure) return undefined
+    const map: Record<string, TableStructure['columns'][number]> = {}
+    structure.columns.forEach((c) => {
+      map[c.name] = c
+    })
+    return map
+  }, [editability.target, tableStructures])
+
   // Decides what to run: a highlighted selection runs just that text, unless the selection
   // spans the whole script (select-all), in which case every statement in it runs in order;
   // with no selection, only the statement the cursor is currently sitting in runs.
@@ -336,6 +355,63 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
     if (!q) return history
     return history.filter((h) => h.sql.toLowerCase().includes(q))
   }, [history, historySearch])
+
+  async function loadSnippets(): Promise<void> {
+    const list = await window.api.snippets.list(tab.connectionId)
+    setSnippets(list)
+  }
+
+  function toggleSnippets(): void {
+    setSnippetsOpen((v) => {
+      const next = !v
+      if (next) loadSnippets()
+      return next
+    })
+  }
+
+  function useSnippet(snippet: QuerySnippet): void {
+    setText(snippet.sql)
+  }
+
+  async function saveCurrentAsSnippet(): Promise<void> {
+    const current = viewRef.current?.state.selection.main
+    const sql = current && !current.empty ? text.slice(current.from, current.to) : text
+    if (!sql.trim()) return
+    const name = prompt('Snippet name:')
+    if (!name || !name.trim()) return
+    await window.api.snippets.save({ connectionId: tab.connectionId, name: name.trim(), sql })
+    if (snippetsOpen) loadSnippets()
+  }
+
+  async function removeSnippet(id: string): Promise<void> {
+    await window.api.snippets.remove(id)
+    loadSnippets()
+  }
+
+  const filteredSnippets = useMemo(() => {
+    const q = snippetSearch.trim().toLowerCase()
+    if (!q) return snippets
+    return snippets.filter((s) => s.name.toLowerCase().includes(q) || s.sql.toLowerCase().includes(q))
+  }, [snippets, snippetSearch])
+
+  // Runs `EXPLAIN <statement>` through the same execution/result-tab pipeline as a normal run —
+  // both MySQL and Postgres return a plain tabular resultset for EXPLAIN, so no special handling
+  // is needed on the result-display side.
+  async function runExplain(): Promise<void> {
+    const toRun = statementsToRun()
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (toRun.length !== 1) return // EXPLAIN only makes sense for a single statement
+    setRunning(true)
+    try {
+      const res = await window.api.db.runQuery(tab.connectionId, `EXPLAIN ${toRun[0]}`)
+      setResults((prev) => [...prev, { sql: `EXPLAIN ${toRun[0]}`, result: res }])
+      setActiveResultIndex(results.length)
+      resetResultView()
+    } finally {
+      setRunning(false)
+    }
+  }
 
   // Client-side search across every column of the active result — narrows what paging,
   // export, and row-selection operate on without re-running the query.
@@ -476,8 +552,17 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
         <button className="btn small" onClick={formatQuery} title="Format the query (or just the selection)">
           <WandSparkles size={12} /> Format (Ctrl+Shift+F)
         </button>
+        <button className="btn small" onClick={runExplain} disabled={running} title="Run EXPLAIN on the statement under the cursor">
+          <Gauge size={12} /> Explain
+        </button>
+        <button className="btn small" onClick={saveCurrentAsSnippet} title="Save the current query (or selection) as a named snippet">
+          <Save size={12} /> Save as snippet
+        </button>
         <button className="btn small" onClick={toggleHistory}>
           <History size={12} /> History {history.length > 0 ? `(${history.length})` : ''}
+        </button>
+        <button className="btn small" onClick={toggleSnippets}>
+          <BookMarked size={12} /> Snippets {snippets.length > 0 ? `(${snippets.length})` : ''}
         </button>
         <span
           className="status-text"
@@ -548,6 +633,51 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
                   onClick={(e) => {
                     e.stopPropagation()
                     removeHistoryEntry(entry.id)
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {snippetsOpen && (
+        <div
+          className="toolbar"
+          data-search-container="query-snippets"
+          style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}
+        >
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              className="filter-input"
+              data-search-input
+              placeholder="Search saved snippets…"
+              value={snippetSearch}
+              onChange={(e) => setSnippetSearch(e.target.value)}
+            />
+          </div>
+          <div className="history-list">
+            {filteredSnippets.length === 0 && (
+              <div style={{ padding: '8px 4px', color: 'var(--text-dim)', fontSize: 12 }}>
+                {snippets.length === 0
+                  ? 'No saved snippets yet — use "Save as snippet" above.'
+                  : 'No snippets match your search.'}
+              </div>
+            )}
+            {filteredSnippets.map((snippet) => (
+              <div key={snippet.id} className="history-item" onClick={() => useSnippet(snippet)}>
+                <div className="history-item-sql">
+                  <strong>{snippet.name}</strong>
+                  <span style={{ color: 'var(--text-dim)' }}> — {snippet.sql}</span>
+                </div>
+                <button
+                  className="icon-btn"
+                  title="Remove snippet"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeSnippet(snippet.id)
                   }}
                 >
                   <X size={12} />
@@ -630,6 +760,7 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
                 onCopyRow={handleCopyRow}
                 selectedRows={selectedRows}
                 onRowSelect={handleRowSelect}
+                columnTypes={editableColumnTypes}
               />
             </div>
             <div className="toolbar" style={{ justifyContent: 'space-between' }}>

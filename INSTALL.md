@@ -19,11 +19,14 @@ TableCraft is a database browsing/editing tool (MySQL, PostgreSQL) — similar t
    - **Host**, **Port**
    - **User**, **Password**
    - **Database**
-3. Click **Test Connection** to verify before saving.
-4. Click **Save**.
+   - Optionally assign a **Group** and/or star it as a **Favorite** to keep a long connection list organized.
+3. If the database is only reachable through a jump/bastion host, turn on **Connect via SSH Tunnel** and
+   fill in the SSH host/user and either a password or a private key (paste it or **Browse…** to a key file).
+4. Click **Test Connection** to verify before saving.
+5. Click **Save**.
 
 > Note: each user has to enter their own connection — a config file copied from another
-> machine won't work (passwords are encrypted per machine/Windows account).
+> machine won't work (passwords, and SSH credentials, are encrypted per machine/Windows account).
 
 ## 3. Handy keyboard shortcuts
 

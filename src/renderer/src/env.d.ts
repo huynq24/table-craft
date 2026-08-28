@@ -8,6 +8,7 @@ import type {
   AlterForeignKeyParams,
   AlterIndexParams,
   ConnectionConfig,
+  ConnectionGroup,
   ConnectionSummary,
   ConnectResult,
   CreateTableParams,
@@ -21,11 +22,16 @@ import type {
   ExportRowsParams,
   ImportCsvParams,
   InsertRowParams,
+  PreviewDdlParams,
   QueryHistoryEntry,
   QueryResult,
+  QuerySnippet,
+  RoutineInfo,
+  RoutineType,
   TableDataParams,
   TableInfo,
   TableStructure,
+  TriggerInfo,
   UpdateRowParams
 } from '@shared/types'
 
@@ -35,6 +41,9 @@ export interface Api {
     save: (config: ConnectionConfig) => Promise<ConnectionSummary>
     delete: (id: string) => Promise<void>
     getWithPassword: (id: string) => Promise<Omit<ConnectionConfig, 'password'> | undefined>
+    listGroups: () => Promise<ConnectionGroup[]>
+    saveGroup: (group: ConnectionGroup) => Promise<ConnectionGroup>
+    deleteGroup: (id: string) => Promise<void>
   }
   db: {
     connect: (config: ConnectionConfig) => Promise<ConnectResult>
@@ -67,6 +76,18 @@ export interface Api {
     dropForeignKey: (params: DropForeignKeyParams) => Promise<void>
     alterForeignKey: (params: AlterForeignKeyParams) => Promise<void>
 
+    previewDdl: (params: PreviewDdlParams) => Promise<string[]>
+
+    listTriggers: (id: string, schema: string) => Promise<TriggerInfo[]>
+    getTriggerDefinition: (id: string, schema: string, name: string) => Promise<string>
+    saveTrigger: (id: string, schema: string, sql: string) => Promise<void>
+    dropTrigger: (id: string, schema: string, name: string, table: string) => Promise<void>
+
+    listRoutines: (id: string, schema: string) => Promise<RoutineInfo[]>
+    getRoutineDefinition: (id: string, schema: string, name: string, type: RoutineType) => Promise<string>
+    saveRoutine: (id: string, schema: string, sql: string) => Promise<void>
+    dropRoutine: (id: string, schema: string, name: string, type: RoutineType) => Promise<void>
+
     exportTable: (params: ExportParams) => Promise<{ ok: boolean; filePath?: string; rowCount?: number }>
     exportRows: (params: ExportRowsParams) => Promise<{ ok: boolean; filePath?: string; rowCount?: number }>
     pickImportFile: () => Promise<string | undefined>
@@ -76,6 +97,14 @@ export interface Api {
     list: (connectionId?: string) => Promise<QueryHistoryEntry[]>
     remove: (id: string) => Promise<void>
     clear: (connectionId?: string) => Promise<void>
+  }
+  snippets: {
+    list: (connectionId?: string) => Promise<QuerySnippet[]>
+    save: (snippet: Omit<QuerySnippet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<QuerySnippet>
+    remove: (id: string) => Promise<void>
+  }
+  system: {
+    pickTextFile: () => Promise<string | undefined>
   }
 }
 

@@ -10,6 +10,7 @@ import type {
   ConnectionConfig,
   CreateTableParams,
   DatabaseInfo,
+  DdlOperation,
   DeleteRowParams,
   DropColumnParams,
   DropForeignKeyParams,
@@ -19,9 +20,12 @@ import type {
   IndexInfo,
   InsertRowParams,
   QueryResult,
+  RoutineInfo,
+  RoutineType,
   TableDataParams,
   TableInfo,
   TableStructure,
+  TriggerInfo,
   UpdateRowParams
 } from '@shared/types'
 import type { DbAdapter } from './adapter'
@@ -245,7 +249,7 @@ export class PostgresAdapter implements DbAdapter {
     }
   }
 
-  async createTable(params: Omit<CreateTableParams, 'connectionId'>): Promise<void> {
+  private buildCreateTableSql(params: Omit<CreateTableParams, 'connectionId'>): string[] {
     const { schema, table, columns } = params
     const defs = columns.map((c) => {
       let def = `${q(c.name)} ${c.dataType}`
@@ -255,87 +259,233 @@ export class PostgresAdapter implements DbAdapter {
     })
     const pkCols = columns.filter((c) => c.primaryKey).map((c) => q(c.name))
     if (pkCols.length) defs.push(`PRIMARY KEY (${pkCols.join(', ')})`)
-    const sql = `CREATE TABLE ${q(schema)}.${q(table)} (${defs.join(', ')})`
-    await this.db.query(sql)
+    return [`CREATE TABLE ${q(schema)}.${q(table)} (${defs.join(', ')})`]
   }
 
-  async addColumn(params: Omit<AddColumnParams, 'connectionId'>): Promise<void> {
+  private buildAddColumnSql(params: Omit<AddColumnParams, 'connectionId'>): string[] {
     const { schema, table, column } = params
     let def = `${q(column.name)} ${column.dataType}`
     if (!column.nullable) def += ' NOT NULL'
     if (column.defaultValue !== null && column.defaultValue !== '') def += ` DEFAULT ${column.defaultValue}`
-    await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} ADD COLUMN ${def}`)
+    return [`ALTER TABLE ${q(schema)}.${q(table)} ADD COLUMN ${def}`]
   }
 
-  async alterColumn(params: Omit<AlterColumnParams, 'connectionId'>): Promise<void> {
+  private buildAlterColumnSql(params: Omit<AlterColumnParams, 'connectionId'>): string[] {
     const { schema, table, original, updated } = params
     const base = `ALTER TABLE ${q(schema)}.${q(table)}`
+    const statements: string[] = []
     if (updated.dataType !== original.dataType) {
-      await this.db.query(`${base} ALTER COLUMN ${q(original.name)} TYPE ${updated.dataType} USING ${q(original.name)}::${updated.dataType}`)
+      statements.push(`${base} ALTER COLUMN ${q(original.name)} TYPE ${updated.dataType} USING ${q(original.name)}::${updated.dataType}`)
     }
     if (updated.nullable !== original.nullable) {
-      await this.db.query(`${base} ALTER COLUMN ${q(original.name)} ${updated.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
+      statements.push(`${base} ALTER COLUMN ${q(original.name)} ${updated.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
     }
     if (updated.defaultValue !== original.defaultValue) {
       if (updated.defaultValue === null || updated.defaultValue === '') {
-        await this.db.query(`${base} ALTER COLUMN ${q(original.name)} DROP DEFAULT`)
+        statements.push(`${base} ALTER COLUMN ${q(original.name)} DROP DEFAULT`)
       } else {
-        await this.db.query(`${base} ALTER COLUMN ${q(original.name)} SET DEFAULT ${updated.defaultValue}`)
+        statements.push(`${base} ALTER COLUMN ${q(original.name)} SET DEFAULT ${updated.defaultValue}`)
       }
     }
     if (updated.name !== original.name) {
-      await this.db.query(`${base} RENAME COLUMN ${q(original.name)} TO ${q(updated.name)}`)
+      statements.push(`${base} RENAME COLUMN ${q(original.name)} TO ${q(updated.name)}`)
     }
+    return statements
+  }
+
+  private buildDropColumnSql(params: Omit<DropColumnParams, 'connectionId'>): string[] {
+    const { schema, table, column } = params
+    return [`ALTER TABLE ${q(schema)}.${q(table)} DROP COLUMN ${q(column)}`]
+  }
+
+  private buildDropTableSql(params: Omit<DropTableParams, 'connectionId'>): string[] {
+    const { schema, table } = params
+    return [`DROP TABLE ${q(schema)}.${q(table)}`]
+  }
+
+  private buildAddIndexSql(params: Omit<AddIndexParams, 'connectionId'>): string[] {
+    const { schema, table, name, columns, unique } = params
+    const cols = columns.map(q).join(', ')
+    return [`CREATE ${unique ? 'UNIQUE ' : ''}INDEX ${q(name)} ON ${q(schema)}.${q(table)} (${cols})`]
+  }
+
+  private buildDropIndexSql(params: Omit<DropIndexParams, 'connectionId'>): string[] {
+    const { schema, table, index } = params
+    if (index.primary) return [`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(index.name)}`]
+    return [`DROP INDEX ${q(schema)}.${q(index.name)}`]
+  }
+
+  private buildAlterIndexSql(params: Omit<AlterIndexParams, 'connectionId'>): string[] {
+    const { schema, table, original, updated } = params
+    return [
+      ...this.buildDropIndexSql({ schema, table, index: original }),
+      ...this.buildAddIndexSql({ schema, table, name: updated.name, columns: updated.columns, unique: updated.unique })
+    ]
+  }
+
+  private buildAddForeignKeySql(params: Omit<AddForeignKeyParams, 'connectionId'>): string[] {
+    const { schema, table, name, column, refTable, refColumn } = params
+    return [
+      `ALTER TABLE ${q(schema)}.${q(table)} ADD CONSTRAINT ${q(name)} FOREIGN KEY (${q(column)}) REFERENCES ${q(schema)}.${q(refTable)} (${q(refColumn)})`
+    ]
+  }
+
+  private buildDropForeignKeySql(params: Omit<DropForeignKeyParams, 'connectionId'>): string[] {
+    const { schema, table, name } = params
+    return [`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(name)}`]
+  }
+
+  private buildAlterForeignKeySql(params: Omit<AlterForeignKeyParams, 'connectionId'>): string[] {
+    const { schema, table, original, updated } = params
+    return [
+      ...this.buildDropForeignKeySql({ schema, table, name: original.name }),
+      ...this.buildAddForeignKeySql({ schema, table, ...updated })
+    ]
+  }
+
+  buildDdlSql(op: DdlOperation): string[] {
+    switch (op.kind) {
+      case 'createTable':
+        return this.buildCreateTableSql(op.params)
+      case 'addColumn':
+        return this.buildAddColumnSql(op.params)
+      case 'alterColumn':
+        return this.buildAlterColumnSql(op.params)
+      case 'dropColumn':
+        return this.buildDropColumnSql(op.params)
+      case 'dropTable':
+        return this.buildDropTableSql(op.params)
+      case 'addIndex':
+        return this.buildAddIndexSql(op.params)
+      case 'dropIndex':
+        return this.buildDropIndexSql(op.params)
+      case 'alterIndex':
+        return this.buildAlterIndexSql(op.params)
+      case 'addForeignKey':
+        return this.buildAddForeignKeySql(op.params)
+      case 'dropForeignKey':
+        return this.buildDropForeignKeySql(op.params)
+      case 'alterForeignKey':
+        return this.buildAlterForeignKeySql(op.params)
+    }
+  }
+
+  private async execAll(statements: string[]): Promise<void> {
+    for (const sql of statements) await this.db.query(sql)
+  }
+
+  async createTable(params: Omit<CreateTableParams, 'connectionId'>): Promise<void> {
+    await this.execAll(this.buildCreateTableSql(params))
+  }
+
+  async addColumn(params: Omit<AddColumnParams, 'connectionId'>): Promise<void> {
+    await this.execAll(this.buildAddColumnSql(params))
+  }
+
+  async alterColumn(params: Omit<AlterColumnParams, 'connectionId'>): Promise<void> {
+    await this.execAll(this.buildAlterColumnSql(params))
   }
 
   async dropColumn(params: Omit<DropColumnParams, 'connectionId'>): Promise<void> {
-    const { schema, table, column } = params
-    await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} DROP COLUMN ${q(column)}`)
+    await this.execAll(this.buildDropColumnSql(params))
   }
 
   async dropTable(params: Omit<DropTableParams, 'connectionId'>): Promise<void> {
-    const { schema, table } = params
-    await this.db.query(`DROP TABLE ${q(schema)}.${q(table)}`)
+    await this.execAll(this.buildDropTableSql(params))
   }
 
   async addIndex(params: Omit<AddIndexParams, 'connectionId'>): Promise<void> {
-    const { schema, table, name, columns, unique } = params
-    const cols = columns.map(q).join(', ')
-    await this.db.query(
-      `CREATE ${unique ? 'UNIQUE ' : ''}INDEX ${q(name)} ON ${q(schema)}.${q(table)} (${cols})`
-    )
+    await this.execAll(this.buildAddIndexSql(params))
   }
 
   async dropIndex(params: Omit<DropIndexParams, 'connectionId'>): Promise<void> {
-    const { schema, table, index } = params
-    if (index.primary) {
-      await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(index.name)}`)
-    } else {
-      await this.db.query(`DROP INDEX ${q(schema)}.${q(index.name)}`)
-    }
+    await this.execAll(this.buildDropIndexSql(params))
   }
 
   async alterIndex(params: Omit<AlterIndexParams, 'connectionId'>): Promise<void> {
-    const { schema, table, original, updated } = params
-    await this.dropIndex({ schema, table, index: original })
-    await this.addIndex({ schema, table, name: updated.name, columns: updated.columns, unique: updated.unique })
+    await this.execAll(this.buildAlterIndexSql(params))
   }
 
   async addForeignKey(params: Omit<AddForeignKeyParams, 'connectionId'>): Promise<void> {
-    const { schema, table, name, column, refTable, refColumn } = params
-    await this.db.query(
-      `ALTER TABLE ${q(schema)}.${q(table)} ADD CONSTRAINT ${q(name)} FOREIGN KEY (${q(column)}) REFERENCES ${q(schema)}.${q(refTable)} (${q(refColumn)})`
-    )
+    await this.execAll(this.buildAddForeignKeySql(params))
   }
 
   async dropForeignKey(params: Omit<DropForeignKeyParams, 'connectionId'>): Promise<void> {
-    const { schema, table, name } = params
-    await this.db.query(`ALTER TABLE ${q(schema)}.${q(table)} DROP CONSTRAINT ${q(name)}`)
+    await this.execAll(this.buildDropForeignKeySql(params))
   }
 
   async alterForeignKey(params: Omit<AlterForeignKeyParams, 'connectionId'>): Promise<void> {
-    const { schema, table, original, updated } = params
-    await this.dropForeignKey({ schema, table, name: original.name })
-    await this.addForeignKey({ schema, table, ...updated })
+    await this.execAll(this.buildAlterForeignKeySql(params))
+  }
+
+  async listTriggers(schema: string): Promise<TriggerInfo[]> {
+    const res = await this.db.query(
+      `SELECT trigger_name as name, event_object_table as tbl, action_timing as timing, event_manipulation as event
+       FROM information_schema.triggers WHERE trigger_schema = $1 ORDER BY trigger_name`,
+      [schema]
+    )
+    return Promise.all(
+      res.rows.map(async (r) => ({
+        name: r.name as string,
+        table: r.tbl as string,
+        timing: r.timing as string,
+        event: r.event as string,
+        definition: await this.getTriggerDefinition(schema, r.name as string)
+      }))
+    )
+  }
+
+  async getTriggerDefinition(_schema: string, name: string): Promise<string> {
+    const res = await this.db.query(
+      `SELECT pg_get_triggerdef(t.oid) as def
+       FROM pg_trigger t WHERE t.tgname = $1 AND NOT t.tgisinternal`,
+      [name]
+    )
+    return (res.rows[0]?.def as string) ?? ''
+  }
+
+  async saveTrigger(_schema: string, sql: string): Promise<void> {
+    await this.db.query(sql)
+  }
+
+  async dropTrigger(schema: string, name: string, table: string): Promise<void> {
+    await this.db.query(`DROP TRIGGER ${q(name)} ON ${q(schema)}.${q(table)}`)
+  }
+
+  async listRoutines(schema: string): Promise<RoutineInfo[]> {
+    const res = await this.db.query(
+      `SELECT routine_name as name, routine_type as type FROM information_schema.routines
+       WHERE routine_schema = $1 ORDER BY routine_name`,
+      [schema]
+    )
+    return Promise.all(
+      res.rows.map(async (r) => {
+        const type: RoutineType = r.type === 'FUNCTION' ? 'function' : 'procedure'
+        return {
+          name: r.name as string,
+          type,
+          definition: await this.getRoutineDefinition(schema, r.name as string, type)
+        }
+      })
+    )
+  }
+
+  async getRoutineDefinition(schema: string, name: string, _type: RoutineType): Promise<string> {
+    const res = await this.db.query(
+      `SELECT pg_get_functiondef(p.oid) as def
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = $1 AND p.proname = $2`,
+      [schema, name]
+    )
+    return (res.rows[0]?.def as string) ?? ''
+  }
+
+  async saveRoutine(_schema: string, sql: string): Promise<void> {
+    await this.db.query(sql)
+  }
+
+  async dropRoutine(schema: string, name: string, type: RoutineType): Promise<void> {
+    const kw = type === 'function' ? 'FUNCTION' : 'PROCEDURE'
+    await this.db.query(`DROP ${kw} ${q(schema)}.${q(name)}`)
   }
 }

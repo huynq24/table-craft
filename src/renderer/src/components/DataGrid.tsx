@@ -1,6 +1,45 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { ChevronUp, ChevronDown, RotateCcw, CopyPlus, Copy, ClipboardPaste, X, ArrowUpRight } from 'lucide-react'
-import type { ForeignKeyInfo } from '@shared/types'
+import type { ColumnInfo, ForeignKeyInfo } from '@shared/types'
+
+/** Best-effort classification of a column's SQL data type, driving which editor renders for it. */
+type EditorKind = 'text' | 'boolean' | 'date' | 'datetime'
+
+function editorKindFor(dataType: string | undefined): EditorKind {
+  if (!dataType) return 'text'
+  const t = dataType.toLowerCase()
+  if (t === 'boolean' || t === 'bool' || t.startsWith('tinyint(1)') || t.startsWith('bit(1)')) return 'boolean'
+  if (t.includes('datetime') || t.includes('timestamp')) return 'datetime'
+  if (t === 'date') return 'date'
+  return 'text'
+}
+
+/** `<input type="date">` needs `YYYY-MM-DD` — best-effort from whatever the cell holds. */
+function toDateInputValue(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  const raw = String(v instanceof Date ? v.toISOString() : v)
+  const d = new Date(raw)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  return raw.slice(0, 10)
+}
+
+/** `<input type="datetime-local">` needs `YYYY-MM-DDTHH:mm`. */
+function toDatetimeInputValue(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  const raw = String(v instanceof Date ? v.toISOString() : v)
+  const d = new Date(raw)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 16)
+  return raw.replace(' ', 'T').slice(0, 16)
+}
+
+/** Turns the datetime-local input's `YYYY-MM-DDTHH:mm` back into `YYYY-MM-DD HH:MM:SS`, which
+ *  both MySQL and Postgres accept natively (sidesteps mysqlAdapter's ISO-with-'T' rejection). */
+function normalizeDatetimeInputValue(v: string): string {
+  if (!v) return v
+  let out = v.replace('T', ' ')
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(out)) out += ':00'
+  return out
+}
 
 export interface DataGridProps {
   columns: string[]
@@ -8,6 +47,8 @@ export interface DataGridProps {
   editable?: boolean
   isDirty?: (rowIndex: number, col: string) => boolean
   onCellEdit?: (rowIndex: number, col: string, value: string | null) => void
+  /** Column data types, keyed by name — picks a boolean/date/datetime editor instead of plain text. */
+  columnTypes?: Record<string, ColumnInfo>
   onDeleteRow?: (rowIndex: number) => void
   onDuplicateRow?: (rowIndex: number) => void
   onCopyRow?: (rowIndex: number) => void
@@ -67,7 +108,8 @@ export default function DataGrid({
   pendingDeleteRows,
   rowOrder,
   foreignKeys,
-  onNavigateFk
+  onNavigateFk,
+  columnTypes
 }: DataGridProps): JSX.Element {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   const [draft, setDraft] = useState('')
@@ -105,13 +147,25 @@ export default function DataGrid({
   function startEdit(rowIndex: number, col: string, value: unknown): void {
     if (!editable) return
     setEditingCell({ row: rowIndex, col })
-    setDraft(value === null || value === undefined ? '' : formatCell(value))
+    const kind = editorKindFor(columnTypes?.[col]?.dataType)
+    if (kind === 'boolean') {
+      const truthy = value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === 't'
+      setDraft(truthy ? '1' : '0')
+    } else if (kind === 'date') {
+      setDraft(toDateInputValue(value))
+    } else if (kind === 'datetime') {
+      setDraft(toDatetimeInputValue(value))
+    } else {
+      setDraft(value === null || value === undefined ? '' : formatCell(value))
+    }
   }
 
   function commitEdit(rowIndex: number, col: string, originalWasNull: boolean): void {
     if (!editingCell) return
     setEditingCell(null)
-    onCellEdit?.(rowIndex, col, draft === '' && originalWasNull ? null : draft)
+    const kind = editorKindFor(columnTypes?.[col]?.dataType)
+    const normalized = kind === 'datetime' ? normalizeDatetimeInputValue(draft) : draft
+    onCellEdit?.(rowIndex, col, normalized === '' && originalWasNull ? null : normalized)
   }
 
   function openRowMenu(e: MouseEvent, rowIndex: number): void {
@@ -179,6 +233,41 @@ export default function DataGrid({
                 const editingThis = editingCell?.row === rowIndex && editingCell.col === col
                 const dirty = isDirty?.(rowIndex, col) ?? false
                 if (editingThis) {
+                  const kind = editorKindFor(columnTypes?.[col]?.dataType)
+                  if (kind === 'boolean') {
+                    return (
+                      <td key={col} className="editing">
+                        <input
+                          type="checkbox"
+                          autoFocus
+                          checked={draft === '1'}
+                          onChange={(e) => setDraft(e.target.checked ? '1' : '0')}
+                          onBlur={() => commitEdit(rowIndex, col, value === null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitEdit(rowIndex, col, value === null)
+                            if (e.key === 'Escape') setEditingCell(null)
+                          }}
+                        />
+                      </td>
+                    )
+                  }
+                  if (kind === 'date' || kind === 'datetime') {
+                    return (
+                      <td key={col} className="editing">
+                        <input
+                          type={kind === 'date' ? 'date' : 'datetime-local'}
+                          autoFocus
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onBlur={() => commitEdit(rowIndex, col, value === null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitEdit(rowIndex, col, value === null)
+                            if (e.key === 'Escape') setEditingCell(null)
+                          }}
+                        />
+                      </td>
+                    )
+                  }
                   return (
                     <td key={col} className="editing">
                       <input

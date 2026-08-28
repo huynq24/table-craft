@@ -1,5 +1,14 @@
-import { Play, Table2, X } from 'lucide-react'
+import { Play, Table2, X, Zap, Sigma } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
+import type { TabKind } from '../store/appStore'
+
+function TabIcon({ kind }: { kind: TabKind }): JSX.Element {
+  const style = { flexShrink: 0 }
+  if (kind === 'query') return <Play size={11} style={style} />
+  if (kind === 'trigger') return <Zap size={11} style={style} />
+  if (kind === 'routine') return <Sigma size={11} style={style} />
+  return <Table2 size={11} style={style} />
+}
 
 export default function TabBar(): JSX.Element {
   const { tabs, activeTabId, setActiveTab, closeTab } = useAppStore()
@@ -29,7 +38,7 @@ export default function TabBar(): JSX.Element {
           title={tab.title}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {tab.kind === 'query' ? <Play size={11} style={{ flexShrink: 0 }} /> : <Table2 size={11} style={{ flexShrink: 0 }} />}
+            <TabIcon kind={tab.kind} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.title}</span>
           </span>
           <span

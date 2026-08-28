@@ -9,6 +9,7 @@ import type {
   ConnectionConfig,
   CreateTableParams,
   DatabaseInfo,
+  DdlOperation,
   DeleteRowParams,
   DropColumnParams,
   DropForeignKeyParams,
@@ -17,9 +18,12 @@ import type {
   FilterCondition,
   InsertRowParams,
   QueryResult,
+  RoutineInfo,
+  RoutineType,
   TableDataParams,
   TableInfo,
   TableStructure,
+  TriggerInfo,
   UpdateRowParams
 } from '@shared/types'
 
@@ -60,8 +64,23 @@ export interface DbAdapter {
   dropForeignKey(params: Omit<DropForeignKeyParams, 'connectionId'>): Promise<void>
   alterForeignKey(params: Omit<AlterForeignKeyParams, 'connectionId'>): Promise<void>
 
+  /** Returns the SQL statement(s) a `DdlOperation` would run, without executing them. */
+  buildDdlSql(op: DdlOperation): string[]
+
   /** Quote an identifier (table/column name) safely for this driver. */
   quoteIdent(name: string): string
+
+  listTriggers(schema: string): Promise<TriggerInfo[]>
+  getTriggerDefinition(schema: string, name: string): Promise<string>
+  /** Executes the caller's raw CREATE TRIGGER SQL as-is. */
+  saveTrigger(schema: string, sql: string): Promise<void>
+  dropTrigger(schema: string, name: string, table: string): Promise<void>
+
+  listRoutines(schema: string): Promise<RoutineInfo[]>
+  getRoutineDefinition(schema: string, name: string, type: RoutineType): Promise<string>
+  /** Executes the caller's raw CREATE PROCEDURE/FUNCTION SQL as-is. */
+  saveRoutine(schema: string, sql: string): Promise<void>
+  dropRoutine(schema: string, name: string, type: RoutineType): Promise<void>
 }
 
 export function buildWhereFromPrimaryKey(

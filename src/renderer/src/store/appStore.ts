@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import type { ConnectionSummary, FilterCondition, TableInfo } from '@shared/types'
+import type { ConnectionGroup, ConnectionSummary, FilterCondition, RoutineType, TableInfo } from '@shared/types'
 
-export type TabKind = 'table' | 'query'
+export type TabKind = 'table' | 'query' | 'trigger' | 'routine'
 
 // Resizable layout bounds. Sizes persist across restarts via localStorage since the
 // store itself has no persistence middleware wired up.
@@ -51,10 +51,18 @@ export interface Tab {
    * re-activating the tab later doesn't reapply a stale filter.
    */
   pendingFilter?: FilterCondition[]
+  /** kind 'trigger' | 'routine' only — the trigger/routine's own name (distinct from `table`,
+   *  which for a trigger tab instead holds the table it's attached to). */
+  objectName?: string
+  /** Only for kind 'routine' — which SHOW CREATE/DDL flavor to use. */
+  routineType?: RoutineType
+  /** True for a brand-new trigger/routine tab that hasn't been saved (created) yet. */
+  isNew?: boolean
 }
 
 interface AppState {
   savedConnections: ConnectionSummary[]
+  connectionGroups: ConnectionGroup[]
   connectedIds: Set<string>
   activeConnectionId: string | null
   tablesByConnection: Record<string, TableInfo[]>
@@ -66,6 +74,7 @@ interface AppState {
   queryEditorHeight: number
 
   setSavedConnections: (list: ConnectionSummary[]) => void
+  setConnectionGroups: (list: ConnectionGroup[]) => void
   setConnected: (id: string, connected: boolean) => void
   setActiveConnection: (id: string | null) => void
   setTables: (connectionId: string, tables: TableInfo[]) => void
@@ -81,6 +90,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   savedConnections: [],
+  connectionGroups: [],
   connectedIds: new Set(),
   activeConnectionId: null,
   tablesByConnection: {},
@@ -92,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   queryEditorHeight: readStoredWidth(QUERY_EDITOR_HEIGHT_KEY, QUERY_EDITOR_DEFAULT_HEIGHT),
 
   setSavedConnections: (list) => set({ savedConnections: list }),
+  setConnectionGroups: (list) => set({ connectionGroups: list }),
 
   setConnected: (id, connected) =>
     set((s) => {
@@ -108,9 +119,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openTab: (tab) =>
     set((s) => {
-      const existing = s.tabs.find(
-        (t) => t.connectionId === tab.connectionId && t.kind === tab.kind && t.table === tab.table && (tab.kind !== 'query' || t.id === tab.id)
-      )
+      const existing = s.tabs.find((t) => {
+        if (t.connectionId !== tab.connectionId || t.kind !== tab.kind) return false
+        if (tab.kind === 'query') return t.id === tab.id
+        if (tab.kind === 'trigger' || tab.kind === 'routine') return t.objectName === tab.objectName
+        return t.table === tab.table
+      })
       if (existing && tab.kind !== 'query') {
         // Tab's already open (e.g. "jump to referenced row" landed on a table that's already
         // a tab) — just focus it, but still carry over a pendingFilter so the jump's intent

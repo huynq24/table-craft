@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import type { ColumnInfo, CreateTableColumn, ForeignKeyInfo, IndexInfo, TableStructure } from '@shared/types'
+import { COMMON_TYPES, emptyColumnDraft } from '../lib/sqlTypes'
+import { useDdlPreview } from '../lib/useDdlPreview'
+import ConfirmSqlDialog from './ConfirmSqlDialog'
 
 interface Props {
   connectionId: string
@@ -11,22 +14,8 @@ interface Props {
   refreshSignal?: number
 }
 
-const COMMON_TYPES = [
-  'INT',
-  'BIGINT',
-  'VARCHAR(255)',
-  'TEXT',
-  'BOOLEAN',
-  'DATE',
-  'DATETIME',
-  'TIMESTAMP',
-  'DECIMAL(10,2)',
-  'FLOAT',
-  'JSON'
-]
-
 function emptyDraft(): CreateTableColumn {
-  return { name: '', dataType: 'VARCHAR(255)', nullable: true, primaryKey: false, defaultValue: null }
+  return emptyColumnDraft()
 }
 
 interface IndexDraft {
@@ -68,6 +57,8 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
   const [editingFk, setEditingFk] = useState<string | null>(null)
   const [editFkDraft, setEditFkDraft] = useState<ForeignKeyDraft>(emptyFkDraft())
 
+  const ddl = useDdlPreview(connectionId)
+
   async function load(): Promise<void> {
     setLoading(true)
     setError(null)
@@ -96,15 +87,18 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
   async function handleAddColumn(): Promise<void> {
     if (!draft.name.trim()) return
     setError(null)
-    try {
-      await window.api.db.addColumn({ connectionId, schema, table, column: draft })
-      setAddingColumn(false)
-      setDraft(emptyDraft())
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, column: draft }
+    await ddl.confirmAndRun({ kind: 'addColumn', params }, async () => {
+      try {
+        await window.api.db.addColumn({ connectionId, ...params })
+        setAddingColumn(false)
+        setDraft(emptyDraft())
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   function startEdit(col: ColumnInfo): void {
@@ -120,47 +114,48 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
 
   async function handleSaveEdit(original: ColumnInfo): Promise<void> {
     setError(null)
-    try {
-      await window.api.db.alterColumn({ connectionId, schema, table, original, updated: editDraft })
-      setEditingCol(null)
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, original, updated: editDraft }
+    await ddl.confirmAndRun({ kind: 'alterColumn', params }, async () => {
+      try {
+        await window.api.db.alterColumn({ connectionId, ...params })
+        setEditingCol(null)
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   async function handleDropColumn(name: string): Promise<void> {
-    if (!confirm(`Drop column "${name}"?`)) return
     setError(null)
-    try {
-      await window.api.db.dropColumn({ connectionId, schema, table, column: name })
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, column: name }
+    await ddl.confirmAndRun({ kind: 'dropColumn', params }, async () => {
+      try {
+        await window.api.db.dropColumn({ connectionId, ...params })
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   async function handleAddIndex(): Promise<void> {
     if (!indexDraft.name.trim() || indexDraft.columns.length === 0) return
     setError(null)
-    try {
-      await window.api.db.addIndex({
-        connectionId,
-        schema,
-        table,
-        name: indexDraft.name,
-        columns: indexDraft.columns,
-        unique: indexDraft.unique
-      })
-      setAddingIndex(false)
-      setIndexDraft(emptyIndexDraft())
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, name: indexDraft.name, columns: indexDraft.columns, unique: indexDraft.unique }
+    await ddl.confirmAndRun({ kind: 'addIndex', params }, async () => {
+      try {
+        await window.api.db.addIndex({ connectionId, ...params })
+        setAddingIndex(false)
+        setIndexDraft(emptyIndexDraft())
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   function startEditIndex(index: IndexInfo): void {
@@ -171,40 +166,48 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
   async function handleSaveEditIndex(original: IndexInfo): Promise<void> {
     if (!editIndexDraft.name.trim() || editIndexDraft.columns.length === 0) return
     setError(null)
-    try {
-      await window.api.db.alterIndex({ connectionId, schema, table, original, updated: editIndexDraft })
-      setEditingIndex(null)
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, original, updated: editIndexDraft }
+    await ddl.confirmAndRun({ kind: 'alterIndex', params }, async () => {
+      try {
+        await window.api.db.alterIndex({ connectionId, ...params })
+        setEditingIndex(null)
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   async function handleDropIndex(index: IndexInfo): Promise<void> {
-    if (!confirm(`Drop index "${index.name}"?`)) return
     setError(null)
-    try {
-      await window.api.db.dropIndex({ connectionId, schema, table, index })
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, index }
+    await ddl.confirmAndRun({ kind: 'dropIndex', params }, async () => {
+      try {
+        await window.api.db.dropIndex({ connectionId, ...params })
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   async function handleAddForeignKey(): Promise<void> {
     if (!fkDraft.name.trim() || !fkDraft.column || !fkDraft.refTable.trim() || !fkDraft.refColumn.trim()) return
     setError(null)
-    try {
-      await window.api.db.addForeignKey({ connectionId, schema, table, ...fkDraft })
-      setAddingFk(false)
-      setFkDraft(emptyFkDraft())
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, ...fkDraft }
+    await ddl.confirmAndRun({ kind: 'addForeignKey', params }, async () => {
+      try {
+        await window.api.db.addForeignKey({ connectionId, ...params })
+        setAddingFk(false)
+        setFkDraft(emptyFkDraft())
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   function startEditFk(fk: ForeignKeyInfo): void {
@@ -215,26 +218,31 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
   async function handleSaveEditFk(original: ForeignKeyInfo): Promise<void> {
     if (!editFkDraft.name.trim() || !editFkDraft.column || !editFkDraft.refTable.trim() || !editFkDraft.refColumn.trim()) return
     setError(null)
-    try {
-      await window.api.db.alterForeignKey({ connectionId, schema, table, original, updated: editFkDraft })
-      setEditingFk(null)
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, original, updated: editFkDraft }
+    await ddl.confirmAndRun({ kind: 'alterForeignKey', params }, async () => {
+      try {
+        await window.api.db.alterForeignKey({ connectionId, ...params })
+        setEditingFk(null)
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   async function handleDropForeignKey(fk: ForeignKeyInfo): Promise<void> {
-    if (!confirm(`Drop foreign key "${fk.name}"?`)) return
     setError(null)
-    try {
-      await window.api.db.dropForeignKey({ connectionId, schema, table, name: fk.name })
-      await load()
-      onChanged?.()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const params = { schema, table, name: fk.name }
+    await ddl.confirmAndRun({ kind: 'dropForeignKey', params }, async () => {
+      try {
+        await window.api.db.dropForeignKey({ connectionId, ...params })
+        await load()
+        onChanged?.()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    })
   }
 
   const visibleColumns = structure
@@ -245,7 +253,11 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
 
   return (
     <div data-search-container="structure-columns" style={{ flex: 1, overflow: 'auto' }}>
+      {ddl.pendingSql && (
+        <ConfirmSqlDialog sql={ddl.pendingSql} running={ddl.running} onConfirm={ddl.confirm} onCancel={ddl.cancel} />
+      )}
       {error && <div className="error-banner" style={{ margin: 8 }}>{error}</div>}
+      {ddl.previewError && <div className="error-banner" style={{ margin: 8 }}>{ddl.previewError}</div>}
 
       <div className="structure-toolbar">
         <button className="btn small primary" onClick={() => setAddingColumn(true)}>

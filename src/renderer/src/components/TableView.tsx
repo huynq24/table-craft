@@ -16,7 +16,9 @@ import { useAppStore } from '../store/appStore'
 import DataGrid from './DataGrid'
 import StructureView from './StructureView'
 import ErrorDialog from './ErrorDialog'
-import type { FilterCondition, FilterOperator, ForeignKeyInfo } from '@shared/types'
+import ConfirmSqlDialog from './ConfirmSqlDialog'
+import { useDdlPreview } from '../lib/useDdlPreview'
+import type { ColumnInfo, FilterCondition, FilterOperator, ForeignKeyInfo } from '@shared/types'
 
 const DEFAULT_PAGE_SIZE = 100
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500, 1000, 5000]
@@ -67,6 +69,8 @@ export default function TableView({ tab }: Props): JSX.Element {
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [pkColumns, setPkColumns] = useState<string[]>([])
   const [foreignKeys, setForeignKeys] = useState<ForeignKeyInfo[]>([])
+  const [columnInfos, setColumnInfos] = useState<ColumnInfo[]>([])
+  const ddl = useDdlPreview(connectionId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Save can fail per-row (e.g. one of several deletes hits a foreign key constraint) —
@@ -202,15 +206,27 @@ export default function TableView({ tab }: Props): JSX.Element {
     window.api.db
       .getTableStructure(connectionId, schema, table)
       .then((s) => {
-        if (!cancelled) setForeignKeys(s.foreignKeys ?? [])
+        if (cancelled) return
+        setForeignKeys(s.foreignKeys ?? [])
+        setColumnInfos(s.columns ?? [])
       })
       .catch(() => {
-        if (!cancelled) setForeignKeys([])
+        if (!cancelled) {
+          setForeignKeys([])
+          setColumnInfos([])
+        }
       })
     return () => {
       cancelled = true
     }
   }, [connectionId, schema, table])
+
+  // Type-aware cell editors (feature: boolean checkbox / date picker instead of a plain text
+  // input) need each column's declared data type, keyed by name for O(1) lookup in DataGrid.
+  const columnTypes = columnInfos.reduce<Record<string, ColumnInfo>>((acc, c) => {
+    acc[c.name] = c
+    return acc
+  }, {})
 
   // A "jump to referenced row" click elsewhere seeds this tab's pendingFilter (see
   // handleNavigateFk / appStore.openTab) — apply it through the same filter-builder pipeline
@@ -577,6 +593,23 @@ export default function TableView({ tab }: Props): JSX.Element {
     await copyRowsToClipboard([...selectedRows].sort((a, b) => a - b))
   }
 
+  // Excel/Google Sheets put a TSV block on the clipboard (tab-separated cells, newline-separated
+  // rows, no header) — map each pasted row positionally onto the grid's current column order.
+  function parseTsvRows(text: string): Record<string, unknown>[] | null {
+    if (!text.includes('\t') && !text.includes('\n')) return null
+    const lines = text.replace(/\r\n/g, '\n').split('\n').filter((l) => l.length > 0)
+    if (lines.length === 0) return null
+    return lines.map((line) => {
+      const cells = line.split('\t')
+      const row: Record<string, unknown> = {}
+      columns.forEach((c, i) => {
+        if (pkColumns.includes(c)) return // let the DB assign a fresh primary key
+        row[c] = cells[i] ?? ''
+      })
+      return row
+    })
+  }
+
   async function handlePasteRow(): Promise<void> {
     let text: string
     try {
@@ -585,29 +618,31 @@ export default function TableView({ tab }: Props): JSX.Element {
       setError(`Could not read clipboard: ${(err as Error).message}`)
       return
     }
-    let parsed: unknown
+    let rowsToAdd: Record<string, unknown>[] | null = null
     try {
-      parsed = JSON.parse(text)
+      const parsed: unknown = JSON.parse(text)
+      const items = Array.isArray(parsed) ? parsed : [parsed]
+      if (items.length > 0 && items.every((it) => it && typeof it === 'object' && !Array.isArray(it))) {
+        rowsToAdd = items.map((item) => {
+          const obj = item as Record<string, unknown>
+          const row: Record<string, unknown> = {}
+          columns.forEach((c) => {
+            if (pkColumns.includes(c)) return
+            row[c] = c in obj ? (obj[c] ?? '') : ''
+          })
+          return row
+        })
+      }
     } catch {
-      setError('Clipboard doesn\'t contain a valid copied row (expected JSON from "Copy row").')
+      // Not JSON — fall through to the TSV (Excel/Sheets) parser below.
+    }
+    if (!rowsToAdd) rowsToAdd = parseTsvRows(text)
+    if (!rowsToAdd || rowsToAdd.length === 0) {
+      setError('Clipboard doesn\'t contain a copied row (JSON from "Copy row") or a pasted Excel/Sheets selection.')
       return
     }
-    const items = Array.isArray(parsed) ? parsed : [parsed]
-    if (items.length === 0 || items.some((it) => !it || typeof it !== 'object' || Array.isArray(it))) {
-      setError('Clipboard doesn\'t contain valid copied row(s).')
-      return
-    }
-    const rowsToAdd = items.map((item) => {
-      const obj = item as Record<string, unknown>
-      const row: Record<string, unknown> = {}
-      columns.forEach((c) => {
-        if (pkColumns.includes(c)) return // let the DB assign a fresh primary key
-        row[c] = c in obj ? (obj[c] ?? '') : ''
-      })
-      return row
-    })
     pushHistory()
-    setNewRows((prev) => [...prev, ...rowsToAdd])
+    setNewRows((prev) => [...prev, ...rowsToAdd!])
   }
 
   function handleDiscard(): void {
@@ -659,11 +694,13 @@ export default function TableView({ tab }: Props): JSX.Element {
   }
 
   async function handleDropTable(): Promise<void> {
-    if (!confirm(`PERMANENTLY delete table "${table}"? This action cannot be undone.`)) return
-    await window.api.db.dropTable({ connectionId, schema, table })
-    const list = tablesByConnection[connectionId]?.filter((t) => t.name !== table) ?? []
-    setTables(connectionId, list)
-    closeTab(tab.id)
+    const params = { schema, table }
+    await ddl.confirmAndRun({ kind: 'dropTable', params }, async () => {
+      await window.api.db.dropTable({ connectionId, ...params })
+      const list = tablesByConnection[connectionId]?.filter((t) => t.name !== table) ?? []
+      setTables(connectionId, list)
+      closeTab(tab.id)
+    })
   }
 
   const displayRows = [...rows.map((r, i) => ({ ...r, ...pendingEdits[i] })), ...newRows]
@@ -678,6 +715,9 @@ export default function TableView({ tab }: Props): JSX.Element {
     <>
       {saveErrors.length > 0 && (
         <ErrorDialog title="Save errors" errors={saveErrors} onClose={() => setSaveErrors([])} />
+      )}
+      {ddl.pendingSql && (
+        <ConfirmSqlDialog sql={ddl.pendingSql} running={ddl.running} onConfirm={ddl.confirm} onCancel={ddl.cancel} />
       )}
       <div className="toolbar">
         <div className="subtabs">
@@ -815,6 +855,7 @@ export default function TableView({ tab }: Props): JSX.Element {
       )}
 
       {error && <div className="error-banner" style={{ margin: 8 }}>{error}</div>}
+      {ddl.previewError && <div className="error-banner" style={{ margin: 8 }}>{ddl.previewError}</div>}
 
       {subview === 'data' ? (
         <>
@@ -841,6 +882,7 @@ export default function TableView({ tab }: Props): JSX.Element {
               rowOrder={rowOrder}
               foreignKeys={foreignKeys}
               onNavigateFk={handleNavigateFk}
+              columnTypes={columnTypes}
             />
           </div>
           <div className="toolbar" style={{ justifyContent: 'space-between' }}>

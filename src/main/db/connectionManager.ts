@@ -2,19 +2,37 @@ import type { ConnectionConfig } from '@shared/types'
 import type { DbAdapter } from './adapter'
 import { MysqlAdapter } from './mysqlAdapter'
 import { PostgresAdapter } from './postgresAdapter'
+import { openSshTunnel, type TunnelHandle } from './sshTunnel'
 
 /** Holds one live adapter instance per open connection tab. */
 class ConnectionManager {
   private adapters = new Map<string, DbAdapter>()
   private configs = new Map<string, ConnectionConfig>()
+  private tunnels = new Map<string, TunnelHandle>()
 
   async connect(config: ConnectionConfig): Promise<void> {
-    const adapter: DbAdapter = config.driver === 'mysql' ? new MysqlAdapter() : new PostgresAdapter()
-    await adapter.connect(config)
-    // close any previous adapter for this id first
+    // close any previous adapter/tunnel for this id first
     await this.disconnect(config.id)
+
+    let connectConfig = config
+    let tunnel: TunnelHandle | undefined
+    if (config.ssh?.enabled) {
+      tunnel = await openSshTunnel(config.ssh, config.host, config.port)
+      connectConfig = { ...config, host: '127.0.0.1', port: tunnel.localPort }
+    }
+
+    const adapter: DbAdapter = config.driver === 'mysql' ? new MysqlAdapter() : new PostgresAdapter()
+    try {
+      await adapter.connect(connectConfig)
+    } catch (err) {
+      tunnel?.close()
+      throw err
+    }
     this.adapters.set(config.id, adapter)
+    // Keep the *original* (un-tunneled) config so display/defaultSchema logic never sees
+    // the tunnel's local loopback address.
     this.configs.set(config.id, config)
+    if (tunnel) this.tunnels.set(config.id, tunnel)
   }
 
   async disconnect(id: string): Promise<void> {
@@ -23,6 +41,11 @@ class ConnectionManager {
       await existing.disconnect().catch(() => {})
       this.adapters.delete(id)
       this.configs.delete(id)
+    }
+    const tunnel = this.tunnels.get(id)
+    if (tunnel) {
+      tunnel.close()
+      this.tunnels.delete(id)
     }
   }
 

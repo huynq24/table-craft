@@ -2,6 +2,22 @@
 
 export type DriverType = 'mysql' | 'postgres'
 
+export type SshAuthMethod = 'password' | 'privateKey'
+
+export interface SshTunnelConfig {
+  enabled: boolean
+  host: string
+  port: number
+  user: string
+  authMethod: SshAuthMethod
+  /** Never sent back to renderer in list calls; only used when connecting. */
+  password?: string
+  /** PEM-encoded private key content (never sent back to renderer in list calls). */
+  privateKey?: string
+  /** Never sent back to renderer in list calls; only used when connecting. */
+  passphrase?: string
+}
+
 export interface ConnectionConfig {
   id: string
   name: string
@@ -14,6 +30,14 @@ export interface ConnectionConfig {
   database: string
   ssl: boolean
   color?: string
+  groupId?: string
+  favorite?: boolean
+  ssh?: SshTunnelConfig
+}
+
+export interface ConnectionGroup {
+  id: string
+  name: string
 }
 
 /** Connection config as persisted/listed, without the password. */
@@ -251,4 +275,53 @@ export interface QueryHistoryEntry {
   durationMs?: number
   rowCount?: number
   error?: string
+}
+
+export interface QuerySnippet {
+  id: string
+  /** Undefined = usable from any connection's query tab, not just one. */
+  connectionId?: string
+  name: string
+  sql: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Every structural change routes through here first: the renderer calls `db:previewDdl` to get
+ * the exact SQL that would run, shows it in a confirm dialog, and only on confirm calls the real
+ * mutation IPC. Each variant's `params` mirrors that mutation's own (connectionId-less) params.
+ */
+export type DdlOperation =
+  | { kind: 'createTable'; params: Omit<CreateTableParams, 'connectionId'> }
+  | { kind: 'addColumn'; params: Omit<AddColumnParams, 'connectionId'> }
+  | { kind: 'alterColumn'; params: Omit<AlterColumnParams, 'connectionId'> }
+  | { kind: 'dropColumn'; params: Omit<DropColumnParams, 'connectionId'> }
+  | { kind: 'dropTable'; params: Omit<DropTableParams, 'connectionId'> }
+  | { kind: 'addIndex'; params: Omit<AddIndexParams, 'connectionId'> }
+  | { kind: 'dropIndex'; params: Omit<DropIndexParams, 'connectionId'> }
+  | { kind: 'alterIndex'; params: Omit<AlterIndexParams, 'connectionId'> }
+  | { kind: 'addForeignKey'; params: Omit<AddForeignKeyParams, 'connectionId'> }
+  | { kind: 'dropForeignKey'; params: Omit<DropForeignKeyParams, 'connectionId'> }
+  | { kind: 'alterForeignKey'; params: Omit<AlterForeignKeyParams, 'connectionId'> }
+
+export interface PreviewDdlParams {
+  connectionId: string
+  operation: DdlOperation
+}
+
+export type RoutineType = 'procedure' | 'function'
+
+export interface TriggerInfo {
+  name: string
+  table: string
+  timing: string
+  event: string
+  definition: string
+}
+
+export interface RoutineInfo {
+  name: string
+  type: RoutineType
+  definition: string
 }
