@@ -1,6 +1,6 @@
 {
   "name": "tablecraft",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "TableCraft — a TablePlus-like database GUI client for Windows (MySQL & PostgreSQL)",
   "main": "out/main/index.js",
   "author": "sd20",
