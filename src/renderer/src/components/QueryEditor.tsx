@@ -8,6 +8,7 @@ import type { Tab } from '../store/appStore'
 import { useAppStore } from '../store/appStore'
 import { useThemeStore } from '../store/themeStore'
 import DataGrid from './DataGrid'
+import ResizeHandle from './ResizeHandle'
 import { buildRelationMap, buildSqlCompletionSources } from '../lib/sqlCompletion'
 import type { QueryHistoryEntry, QueryResult, TableStructure } from '@shared/types'
 
@@ -47,6 +48,8 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
   const appTheme = useThemeStore((s) => s.theme)
   const driver = useAppStore((s) => s.savedConnections.find((c) => c.id === tab.connectionId)?.driver)
   const dialect = driver === 'mysql' ? MySQL : PostgreSQL
+  const queryEditorHeight = useAppStore((s) => s.queryEditorHeight)
+  const resizeQueryEditorBy = useAppStore((s) => s.resizeQueryEditorBy)
 
   const [sqlSchema, setSqlSchema] = useState<Record<string, string[]>>({})
   const [defaultSchemaName, setDefaultSchemaName] = useState('')
@@ -241,10 +244,10 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
         </div>
       )}
 
-      <div className="query-editor-wrap">
+      <div className="query-editor-wrap" style={{ height: queryEditorHeight }}>
         <CodeMirror
           value={text}
-          height="200px"
+          height={`${queryEditorHeight}px`}
           theme={appTheme === 'dark' ? oneDark : 'light'}
           basicSetup={{ autocompletion: false }}
           extensions={extensions}
@@ -257,6 +260,7 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
           }}
         />
       </div>
+      <ResizeHandle direction="vertical" onResize={resizeQueryEditorBy} />
       <div className="query-results">
         {result?.error && <div className="error-banner" style={{ margin: 8 }}>{result.error}</div>}
         {result && !result.error && result.columns.length > 0 && (

@@ -7,9 +7,10 @@ import TableView from './components/TableView'
 import QueryEditor from './components/QueryEditor'
 import ConnectionModal from './components/ConnectionModal'
 import ErrorBoundary from './components/ErrorBoundary'
+import ResizeHandle from './components/ResizeHandle'
 
 export default function App(): JSX.Element {
-  const { setSavedConnections, tabs, activeTabId, connectModalOpen } = useAppStore()
+  const { setSavedConnections, tabs, activeTabId, connectModalOpen, resizeSidebarBy } = useAppStore()
 
   useEffect(() => {
     window.api.connections.list().then(setSavedConnections)
@@ -43,6 +44,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app">
       <Sidebar />
+      <ResizeHandle direction="horizontal" onResize={resizeSidebarBy} />
       <div className="main">
         <TabBar />
         <div className="tab-content">

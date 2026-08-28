@@ -83,14 +83,63 @@ button {
 }
 
 /* ---------- Sidebar ---------- */
+/* Width is set inline from appStore's sidebarWidth (dragged via the ResizeHandle
+   in App.tsx) so it can be resized and persisted; this class only handles look. */
 .sidebar {
-  width: 260px;
-  min-width: 180px;
-  max-width: 420px;
+  flex-shrink: 0;
   background: var(--bg-1);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+}
+
+/* ---------- Resize handles ---------- */
+.resize-handle {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+  background: transparent;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.resize-handle:hover::after,
+.resize-handle:active::after {
+  opacity: 0.6;
+}
+
+.resize-handle-horizontal {
+  width: 5px;
+  margin-left: -2px;
+  margin-right: -3px;
+  cursor: col-resize;
+}
+
+.resize-handle-horizontal::after {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+}
+
+.resize-handle-vertical {
+  height: 5px;
+  margin-top: -2px;
+  margin-bottom: -3px;
+  cursor: row-resize;
+}
+
+.resize-handle-vertical::after {
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 1px;
 }
 
 .sidebar-header {
@@ -526,10 +575,11 @@ td.row-num {
   min-height: 0;
 }
 
+/* Height is set inline from appStore's queryEditorHeight (dragged via the
+   ResizeHandle below it in QueryEditor.tsx) so the SQL editor can be resized. */
 .query-editor-wrap {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  max-height: 40vh;
   overflow: auto;
 }
 

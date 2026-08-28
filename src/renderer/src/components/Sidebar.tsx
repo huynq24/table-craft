@@ -36,7 +36,8 @@ export default function Sidebar(): JSX.Element {
     openConnectModal,
     setSavedConnections,
     tabs,
-    closeTab
+    closeTab,
+    sidebarWidth
   } = useAppStore()
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -101,7 +102,7 @@ export default function Sidebar(): JSX.Element {
   }
 
   return (
-    <div className="sidebar">
+    <div className="sidebar" style={{ width: sidebarWidth }}>
       <div className="sidebar-header">
         <span className="sidebar-title">Connections</span>
         <span style={{ display: 'flex', gap: 2 }}>
