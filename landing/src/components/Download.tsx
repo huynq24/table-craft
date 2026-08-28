@@ -46,8 +46,7 @@ export default function Download() {
 
             <p className="download-note">
               Known limitations in v{VERSION}: editing or deleting a row requires a primary key,
-              the SQL editor runs one statement at a time, and SQLite/SQL Server support is on
-              the roadmap.
+              and SQLite/SQL Server support is on the roadmap.
             </p>
           </div>
         </Reveal>
