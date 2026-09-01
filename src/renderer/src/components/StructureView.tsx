@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import type { ColumnInfo, CreateTableColumn, ForeignKeyInfo, IndexInfo, TableStructure } from '@shared/types'
-import { COMMON_TYPES, emptyColumnDraft } from '../lib/sqlTypes'
+import { emptyColumnDraft } from '../lib/sqlTypes'
 import { useDdlPreview } from '../lib/useDdlPreview'
 import ConfirmSqlDialog from './ConfirmSqlDialog'
+import TypeInput from './TypeInput'
 
 interface Props {
   connectionId: string
@@ -302,11 +303,9 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
                     />
                   </td>
                   <td>
-                    <input
+                    <TypeInput
                       value={editDraft.dataType}
-                      onChange={(e) => setEditDraft({ ...editDraft, dataType: e.target.value })}
-                      list="type-options"
-                      style={{ width: '100%', background: 'var(--bg-0)', border: '1px solid var(--border)', color: 'var(--text)', padding: 3 }}
+                      onChange={(v) => setEditDraft({ ...editDraft, dataType: v })}
                     />
                   </td>
                   <td>
@@ -372,12 +371,7 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
                 />
               </td>
               <td>
-                <input
-                  value={draft.dataType}
-                  onChange={(e) => setDraft({ ...draft, dataType: e.target.value })}
-                  list="type-options"
-                  style={{ width: '100%', background: 'var(--bg-0)', border: '1px solid var(--border)', color: 'var(--text)', padding: 3 }}
-                />
+                <TypeInput value={draft.dataType} onChange={(v) => setDraft({ ...draft, dataType: v })} />
               </td>
               <td>
                 <input
@@ -406,11 +400,6 @@ export default function StructureView({ connectionId, schema, table, onChanged, 
           )}
         </tbody>
       </table>
-      <datalist id="type-options">
-        {COMMON_TYPES.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
 
       <div className="structure-toolbar">
         <div className="section-title" style={{ margin: 0 }}>Indexes</div>

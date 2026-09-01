@@ -124,6 +124,16 @@ export interface RowIdentifier {
   [column: string]: unknown
 }
 
+/**
+ * Sentinel placed in `UpdateRowParams.changes` / `InsertRowParams.values` for a cell the user
+ * left blank — a real NUL byte can't occur in user-typed cell text, so this can't collide with
+ * an actual value. The adapters render it as the bare SQL `DEFAULT` keyword (not a bound
+ * parameter), which asks the database to apply that column's own DEFAULT (or NULL, or raise
+ * the column's own NOT-NULL error) — the same thing leaving the column out of an INSERT does,
+ * but expressible for UPDATE too.
+ */
+export const SQL_DEFAULT = '\u0000__TABLECRAFT_SQL_DEFAULT__\u0000'
+
 export interface UpdateRowParams {
   connectionId: string
   schema: string

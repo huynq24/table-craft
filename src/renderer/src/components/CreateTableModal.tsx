@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useDdlPreview } from '../lib/useDdlPreview'
-import { COMMON_TYPES, emptyColumnDraft } from '../lib/sqlTypes'
+import { emptyColumnDraft } from '../lib/sqlTypes'
 import ConfirmSqlDialog from './ConfirmSqlDialog'
+import TypeInput from './TypeInput'
 import type { CreateTableColumn } from '@shared/types'
 
 interface Props {
@@ -101,12 +102,7 @@ export default function CreateTableModal({ connectionId, onClose }: Props): JSX.
                     />
                   </td>
                   <td>
-                    <input
-                      value={col.dataType}
-                      onChange={(e) => updateColumn(i, { dataType: e.target.value })}
-                      list="create-table-type-options"
-                      style={{ width: '100%', background: 'var(--bg-0)', border: '1px solid var(--border)', color: 'var(--text)', padding: 3 }}
-                    />
+                    <TypeInput value={col.dataType} onChange={(v) => updateColumn(i, { dataType: v })} />
                   </td>
                   <td>
                     <input type="checkbox" checked={col.nullable} onChange={(e) => updateColumn(i, { nullable: e.target.checked })} />
@@ -130,11 +126,6 @@ export default function CreateTableModal({ connectionId, onClose }: Props): JSX.
               ))}
             </tbody>
           </table>
-          <datalist id="create-table-type-options">
-            {COMMON_TYPES.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
           <button className="btn small" onClick={addColumnRow} style={{ alignSelf: 'flex-start' }}>
             <Plus size={12} /> Add column
           </button>

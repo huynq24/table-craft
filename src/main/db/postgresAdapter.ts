@@ -28,6 +28,7 @@ import type {
   TriggerInfo,
   UpdateRowParams
 } from '@shared/types'
+import { SQL_DEFAULT } from '@shared/types'
 import type { DbAdapter } from './adapter'
 import { buildWhereFromFilters, buildWhereFromPrimaryKey } from './adapter'
 
@@ -204,10 +205,19 @@ export class PostgresAdapter implements DbAdapter {
 
   async updateRow(params: Omit<UpdateRowParams, 'connectionId'>): Promise<void> {
     const { schema, table, primaryKey, changes } = params
-    const setEntries = Object.entries(changes)
-    const setParts = setEntries.map(([c], idx) => `${q(c)} = $${idx + 1}`)
-    const setValues = setEntries.map(([, v]) => v)
-    const { clause, values: pkValues } = buildWhereFromPrimaryKey(primaryKey, q, setEntries.length + 1)
+    // A cell left blank comes through as the SQL_DEFAULT sentinel — emit the bare `DEFAULT`
+    // keyword for it instead of a bound parameter, so the column resets to its own default.
+    const setParts: string[] = []
+    const setValues: unknown[] = []
+    for (const [c, v] of Object.entries(changes)) {
+      if (v === SQL_DEFAULT) {
+        setParts.push(`${q(c)} = DEFAULT`)
+      } else {
+        setValues.push(v)
+        setParts.push(`${q(c)} = $${setValues.length}`)
+      }
+    }
+    const { clause, values: pkValues } = buildWhereFromPrimaryKey(primaryKey, q, setValues.length + 1)
     const sql = `UPDATE ${q(schema)}.${q(table)} SET ${setParts.join(', ')} WHERE ${clause}`
     await this.db.query(sql, [...setValues, ...pkValues])
   }
@@ -215,9 +225,20 @@ export class PostgresAdapter implements DbAdapter {
   async insertRow(params: Omit<InsertRowParams, 'connectionId'>): Promise<void> {
     const { schema, table, values } = params
     const cols = Object.keys(values)
-    const placeholders = cols.map((_, i) => `$${i + 1}`)
+    // A cell left blank comes through as the SQL_DEFAULT sentinel — emit the bare `DEFAULT`
+    // keyword for it instead of a bound parameter, so the column takes its own default.
+    const placeholders: string[] = []
+    const bound: unknown[] = []
+    cols.forEach((c) => {
+      if (values[c] === SQL_DEFAULT) {
+        placeholders.push('DEFAULT')
+      } else {
+        bound.push(values[c])
+        placeholders.push(`$${bound.length}`)
+      }
+    })
     const sql = `INSERT INTO ${q(schema)}.${q(table)} (${cols.map(q).join(', ')}) VALUES (${placeholders.join(', ')})`
-    await this.db.query(sql, Object.values(values))
+    await this.db.query(sql, bound)
   }
 
   async deleteRow(params: Omit<DeleteRowParams, 'connectionId'>): Promise<void> {

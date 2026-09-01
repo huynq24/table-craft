@@ -28,6 +28,7 @@ import type {
   TriggerInfo,
   UpdateRowParams
 } from '@shared/types'
+import { SQL_DEFAULT } from '@shared/types'
 import type { DbAdapter } from './adapter'
 import { buildWhereFromFilters, buildWhereFromPrimaryKey } from './adapter'
 
@@ -208,8 +209,18 @@ export class MysqlAdapter implements DbAdapter {
   async updateRow(params: Omit<UpdateRowParams, 'connectionId'>): Promise<void> {
     const { schema, table, primaryKey, changes } = params
     const normalized = normalizeRow(changes)
-    const setParts = Object.keys(normalized).map((c) => `${q(c)} = ?`)
-    const setValues = Object.values(normalized)
+    // A cell left blank comes through as the SQL_DEFAULT sentinel — emit the bare `DEFAULT`
+    // keyword for it instead of a bound `?` parameter, so the column resets to its own default.
+    const setParts: string[] = []
+    const setValues: unknown[] = []
+    for (const [c, v] of Object.entries(normalized)) {
+      if (v === SQL_DEFAULT) {
+        setParts.push(`${q(c)} = DEFAULT`)
+      } else {
+        setParts.push(`${q(c)} = ?`)
+        setValues.push(v)
+      }
+    }
     const { clause, values: pkValues } = buildWhereFromPrimaryKey(primaryKey, q, 0, () => '?')
     const sql = `UPDATE ${q(schema)}.${q(table)} SET ${setParts.join(', ')} WHERE ${clause}`
     await this.db.query(sql, [...setValues, ...pkValues])
@@ -219,9 +230,20 @@ export class MysqlAdapter implements DbAdapter {
     const { schema, table, values } = params
     const normalized = normalizeRow(values)
     const cols = Object.keys(normalized)
-    const placeholders = cols.map(() => '?')
+    // A cell left blank comes through as the SQL_DEFAULT sentinel — emit the bare `DEFAULT`
+    // keyword for it instead of a bound `?` parameter, so the column takes its own default.
+    const placeholders: string[] = []
+    const bound: unknown[] = []
+    cols.forEach((c) => {
+      if (normalized[c] === SQL_DEFAULT) {
+        placeholders.push('DEFAULT')
+      } else {
+        placeholders.push('?')
+        bound.push(normalized[c])
+      }
+    })
     const sql = `INSERT INTO ${q(schema)}.${q(table)} (${cols.map(q).join(', ')}) VALUES (${placeholders.join(', ')})`
-    await this.db.query(sql, Object.values(normalized))
+    await this.db.query(sql, bound)
   }
 
   async deleteRow(params: Omit<DeleteRowParams, 'connectionId'>): Promise<void> {

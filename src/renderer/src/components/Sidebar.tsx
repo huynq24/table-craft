@@ -226,84 +226,90 @@ export default function Sidebar(): JSX.Element {
 
     return (
       <div key={conn.id}>
-        <div
-          className={`conn-row${activeConnectionId === conn.id ? ' active' : ''}`}
-          onClick={() => handleConnectionClick(conn)}
-        >
-          <span className={`conn-dot${isConnected ? ' on' : ''}`} />
-          <DriverBadge driver={conn.driver} />
-          <span className="conn-name" title={`${conn.host}:${conn.port}/${conn.database}`}>
-            {conn.name}
-          </span>
-          {busyId === conn.id && <span className="spinner" />}
-          <span className="conn-actions">
-            <button
-              className="icon-btn"
-              title={conn.favorite ? 'Unfavorite' : 'Mark as favorite'}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleToggleFavorite(conn)
-              }}
-            >
-              <Star size={13} fill={conn.favorite ? 'var(--yellow)' : 'none'} style={{ color: 'var(--yellow)' }} />
-            </button>
-            {isConnected && (
+        <div className="conn-sticky-header">
+          <div
+            className={`conn-row${activeConnectionId === conn.id ? ' active' : ''}`}
+            onClick={() => handleConnectionClick(conn)}
+          >
+            <span className={`conn-dot${isConnected ? ' on' : ''}`} />
+            <DriverBadge driver={conn.driver} />
+            <span className="conn-name" title={`${conn.host}:${conn.port}/${conn.database}`}>
+              {conn.name}
+            </span>
+            {busyId === conn.id && <span className="spinner" />}
+            <span className="conn-actions">
               <button
                 className="icon-btn"
-                title="Disconnect"
+                title={conn.favorite ? 'Unfavorite' : 'Mark as favorite'}
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleDisconnect(conn.id)
+                  handleToggleFavorite(conn)
                 }}
               >
-                <Power size={13} />
+                <Star size={13} fill={conn.favorite ? 'var(--yellow)' : 'none'} style={{ color: 'var(--yellow)' }} />
               </button>
-            )}
-            <button
-              className="icon-btn"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation()
-                openConnectModal(conn)
-              }}
-            >
-              <Pencil size={13} />
-            </button>
-            <button
-              className="icon-btn"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDelete(conn)
-              }}
-            >
-              <Trash2 size={13} />
-            </button>
-          </span>
+              {isConnected && (
+                <button
+                  className="icon-btn"
+                  title="Disconnect"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDisconnect(conn.id)
+                  }}
+                >
+                  <Power size={13} />
+                </button>
+              )}
+              <button
+                className="icon-btn"
+                title="Edit"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openConnectModal(conn)
+                }}
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                className="icon-btn"
+                title="Delete"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDelete(conn)
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </span>
+          </div>
+          {isExpanded && isConnected && (
+            <div className="table-list-sticky-top">
+              <div className="table-row" onClick={() => handleOpenQuery(conn)} title="New SQL query">
+                <span className="table-icon">
+                  <Play size={11} />
+                </span>
+                <span>New Query</span>
+              </div>
+              {allTables.length > 0 && (
+                <div style={{ padding: '2px 10px 6px', display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    className="filter-input"
+                    data-search-input
+                    style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
+                    placeholder="Search tables…"
+                    value={tableSearch[conn.id] ?? ''}
+                    onChange={(e) => setTableSearch((prev) => ({ ...prev, [conn.id]: e.target.value }))}
+                  />
+                  <button className="icon-btn" title="New table" onClick={() => setCreatingTableFor(conn.id)}>
+                    <Plus size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {isExpanded && isConnected && (
           <div className="table-list" data-search-container="sidebar-tables">
-            <div className="table-row" onClick={() => handleOpenQuery(conn)} title="New SQL query">
-              <span className="table-icon">
-                <Play size={11} />
-              </span>
-              <span>New Query</span>
-            </div>
-            {allTables.length > 0 && (
-              <div style={{ padding: '2px 10px 6px', display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                <input
-                  className="filter-input"
-                  data-search-input
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 12 }}
-                  placeholder="Search tables…"
-                  value={tableSearch[conn.id] ?? ''}
-                  onChange={(e) => setTableSearch((prev) => ({ ...prev, [conn.id]: e.target.value }))}
-                />
-                <button className="icon-btn" title="New table" onClick={() => setCreatingTableFor(conn.id)}>
-                  <Plus size={13} />
-                </button>
-              </div>
-            )}
             {tables.map((t) => {
               const tabId = `table-${conn.id}-${t.schema}-${t.name}`
               const isActiveTable = activeTabId === tabId

@@ -17,6 +17,7 @@ import { buildRelationMap, buildSqlCompletionSources } from '../lib/sqlCompletio
 import { splitStatements, statementAtOffset } from '../lib/sqlStatements'
 import { detectSingleTableSource, resolveEditability } from '../lib/queryEditability'
 import type { QueryHistoryEntry, QueryResult, QuerySnippet, TableStructure } from '@shared/types'
+import { SQL_DEFAULT } from '@shared/types'
 
 interface Props {
   tab: Tab
@@ -444,13 +445,17 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
     target.pkColumns.forEach((pk) => {
       primaryKey[pk] = row[pk]
     })
+    // A cell left blank (as opposed to explicitly cleared to NULL) means "no value typed" —
+    // resolve to the SQL_DEFAULT sentinel so the column resets to its own default instead of
+    // an empty string. See TableView's handleCellEdit for the same rule.
+    const resolved = value === '' ? SQL_DEFAULT : value
     try {
       await window.api.db.updateRow({
         connectionId: tab.connectionId,
         schema: defaultSchemaName,
         table: target.table,
         primaryKey,
-        changes: { [col]: value }
+        changes: { [col]: resolved }
       })
       setResults((prev) =>
         prev.map((entry, i) =>
@@ -460,7 +465,7 @@ export default function QueryEditor({ tab }: Props): JSX.Element {
                 result: {
                   ...entry.result,
                   rows: entry.result.rows.map((r) =>
-                    target.pkColumns.every((pk) => r[pk] === primaryKey[pk]) ? { ...r, [col]: value } : r
+                    target.pkColumns.every((pk) => r[pk] === primaryKey[pk]) ? { ...r, [col]: resolved } : r
                   )
                 }
               }

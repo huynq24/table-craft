@@ -9,7 +9,8 @@ import {
   Settings2,
   ChevronLeft,
   ChevronRight,
-  Check
+  Check,
+  CopyPlus
 } from 'lucide-react'
 import type { Tab } from '../store/appStore'
 import { useAppStore } from '../store/appStore'
@@ -19,6 +20,7 @@ import ErrorDialog from './ErrorDialog'
 import ConfirmSqlDialog from './ConfirmSqlDialog'
 import { useDdlPreview } from '../lib/useDdlPreview'
 import type { ColumnInfo, FilterCondition, FilterOperator, ForeignKeyInfo } from '@shared/types'
+import { SQL_DEFAULT } from '@shared/types'
 
 const DEFAULT_PAGE_SIZE = 100
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500, 1000, 5000]
@@ -40,6 +42,9 @@ interface DraftCondition {
   column: string
   operator: FilterOperator
   value: string
+  // Unchecked rows stay in the builder but are left out of the WHERE clause on Search —
+  // lets someone park a condition without losing it by deleting the row outright.
+  enabled: boolean
 }
 
 function needsValue(op: FilterOperator): boolean {
@@ -51,7 +56,8 @@ function toDraftConditions(filters: FilterCondition[] | undefined): DraftConditi
     id: crypto.randomUUID(),
     column: f.column,
     operator: f.operator,
-    value: f.value ?? ''
+    value: f.value ?? '',
+    enabled: true
   }))
 }
 
@@ -413,6 +419,13 @@ export default function TableView({ tab }: Props): JSX.Element {
     })
   }
 
+  // Right-click a header → "Filter by this column" (feature: header context menu): drops into
+  // the plain filter builder with a fresh condition pre-scoped to that column, ready for a value.
+  function handleFilterByColumn(col: string): void {
+    setAdvancedMode(false)
+    setConditions((prev) => [...prev, { id: crypto.randomUUID(), column: col, operator: '=', value: '', enabled: true }])
+  }
+
   function handleHeaderClick(col: string): void {
     if (sortColumn === col) {
       setSortDir((d) => (d === 'ASC' ? 'DESC' : 'ASC'))
@@ -427,7 +440,7 @@ export default function TableView({ tab }: Props): JSX.Element {
   function addCondition(): void {
     setConditions((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), column: columns[0] ?? '', operator: '=', value: '' }
+      { id: crypto.randomUUID(), column: columns[0] ?? '', operator: '=', value: '', enabled: true }
     ])
   }
 
@@ -439,9 +452,18 @@ export default function TableView({ tab }: Props): JSX.Element {
     setConditions((prev) => prev.filter((c) => c.id !== id))
   }
 
+  function duplicateCondition(id: string): void {
+    setConditions((prev) => {
+      const idx = prev.findIndex((c) => c.id === id)
+      if (idx === -1) return prev
+      const clone: DraftCondition = { ...prev[idx], id: crypto.randomUUID() }
+      return [...prev.slice(0, idx + 1), clone, ...prev.slice(idx + 1)]
+    })
+  }
+
   function applyConditions(): void {
     const built: FilterCondition[] = conditions
-      .filter((c) => c.column && (!needsValue(c.operator) || c.value.trim() !== ''))
+      .filter((c) => c.enabled && c.column && (!needsValue(c.operator) || c.value.trim() !== ''))
       .map((c) => ({ column: c.column, operator: c.operator, value: c.value }))
     setAppliedFilters(built)
     setOffset(0)
@@ -470,13 +492,18 @@ export default function TableView({ tab }: Props): JSX.Element {
 
   function handleCellEdit(rowIndex: number, col: string, value: string | null): void {
     pushHistory()
+    // Leaving a cell blank (as opposed to explicitly clearing it to NULL, which DataGrid only
+    // sends when the cell was already NULL — see its commitEdit) means "no value was typed for
+    // this column" — resolve it to the SQL_DEFAULT sentinel so Save applies that column's own
+    // default instead of writing an empty string.
+    const resolved = value === '' ? SQL_DEFAULT : value
     if (rowIndex < rows.length) {
-      setPendingEdits((prev) => ({ ...prev, [rowIndex]: { ...prev[rowIndex], [col]: value } }))
+      setPendingEdits((prev) => ({ ...prev, [rowIndex]: { ...prev[rowIndex], [col]: resolved } }))
     } else {
       const newIdx = rowIndex - rows.length
       setNewRows((prev) => {
         const copy = [...prev]
-        copy[newIdx] = { ...copy[newIdx], [col]: value }
+        copy[newIdx] = { ...copy[newIdx], [col]: resolved }
         return copy
       })
     }
@@ -784,7 +811,13 @@ export default function TableView({ tab }: Props): JSX.Element {
       {subview === 'data' && !advancedMode && (
         <div className="toolbar" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
           {conditions.map((cond) => (
-            <div key={cond.id} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <div key={cond.id} style={{ display: 'flex', gap: 4, alignItems: 'center', opacity: cond.enabled ? 1 : 0.55 }}>
+              <input
+                type="checkbox"
+                checked={cond.enabled}
+                onChange={(e) => updateCondition(cond.id, { enabled: e.target.checked })}
+                title={cond.enabled ? 'Uncheck to skip this condition on Search' : 'Condition is disabled — check to include it on Search'}
+              />
               <select
                 value={cond.column}
                 onChange={(e) => updateCondition(cond.id, { column: e.target.value })}
@@ -817,12 +850,15 @@ export default function TableView({ tab }: Props): JSX.Element {
                   onKeyDown={(e) => e.key === 'Enter' && applyConditions()}
                 />
               )}
+              <button className="icon-btn" title="Duplicate condition" onClick={() => duplicateCondition(cond.id)}>
+                <CopyPlus size={13} />
+              </button>
               <button className="icon-btn" title="Remove condition" onClick={() => removeCondition(cond.id)}>
-                <X size={12} />
+                <X size={13} />
               </button>
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button className="btn small" onClick={addCondition}>
               + Condition
             </button>
@@ -873,6 +909,7 @@ export default function TableView({ tab }: Props): JSX.Element {
               onCopyRow={handleCopyRow}
               onPasteRow={handlePasteRow}
               onHeaderClick={handleHeaderClick}
+              onFilterByColumn={handleFilterByColumn}
               sortColumn={sortColumn}
               sortDir={sortDir}
               offset={offset}

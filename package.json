@@ -1,6 +1,6 @@
 {
   "name": "tablecraft",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TableCraft — a TablePlus-like database GUI client for Windows (MySQL & PostgreSQL)",
   "main": "out/main/index.js",
   "author": "Quang Huy Nguyen",
@@ -9,6 +9,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "clean": "node scripts/clean.js",
+    "predist": "node scripts/clean.js",
     "dist": "electron-vite build && electron-builder --win --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
